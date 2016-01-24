@@ -1,0 +1,138 @@
+.animation(@value){
+    animation: @value;
+    -moz-animation: @value;
+    -ms-animation: @value; 
+    -o-animation: @value; 
+    -webkit-animation: @value; 
+}
+
+.animation-delay(@value){
+    animation-delay: @value;
+    -moz-animation-delay: @value;
+    -ms-animation-delay: @value; 
+    -o-animation-delay: @value; 
+    -webkit-animation-delay: @value; 
+}
+
+.animation-fill-mode(@value) {
+    animation-fill-mode: @value;
+    -moz-animation-fill-mode: @value;
+    -ms-animation-fill-mode: @value;
+    -o-animation-fill-mode: @value;
+    -webkit-animation-fill-mode: @value;
+}
+
+.box-sizing(@value) {
+    box-sizing: @value; 
+    -moz-box-sizing: @value; 
+    -ms-box-sizing: @value; 
+    -webkit-box-sizing: @value; 
+}
+
+.perspective(@value){
+    perspective: @value; 
+    -moz-perspective: @value; 
+    -ms-perspective: @value; 
+    -o-perspective: @value; 
+    -webkit-perspective: @value; 
+}
+
+.transform(@value){
+    -webkit-transform: @value;
+    -moz-transform: @value;
+    -ms-transform: @value;
+    -o-transform: @value;
+    transform: @value;
+}
+
+.transform-origin(@value) {
+    -webkit-transform-origin: @value;
+    -moz-transform-origin: @value;
+    -ms-transform-origin: @value;
+    -o-transform-origin: @value;
+    transform-origin: @value;   
+}
+
+.transform-style(@value){
+    -webkit-transform-style: @value;
+    -moz-transform-style: @value;
+    -ms-transform-style: @value;
+    -o-transform-style: @value;
+    transform-style: @value;
+}
+
+.transition(@value){
+    -webkit-transition: @value;
+    -moz-transition: @value;
+    transition: @value;
+}
+
+.transition-delay(@value){
+    -webkit-transition-delay: @value;
+    -moz-transition-delay: @value;
+    transition-delay: @value;
+}
+
+.transition-duration(@value){
+    -webkit-transition-duration: @value;
+    -moz-transition-duration: @value;
+    transition-duration: @value;
+}
+
+.transition-timing-function(@value){
+    -webkit-transition-timing-function: @value;
+    -moz-transition-timing-function: @value;
+    transition-timing-function: @value;
+}
+
+.linear-gradient(...){
+    @joined:   ~`"@{arguments}".slice(1,-1)`;
+    background-image: linear-gradient(@joined); 
+    background-image: -moz-linear-gradient(@joined); 
+    background-image: -ms-linear-gradient(@joined); 
+    background-image: -o-linear-gradient(@joined); 
+    background-image: -webkit-linear-gradient(@joined);
+}
+
+.radial-gradient(...){
+    @joined:   ~`"@{arguments}".slice(1,-1)`;
+    background-image: radial-gradient(@joined); 
+    background-image: -moz-radial-gradient(@joined); 
+    background-image: -ms-radial-gradient(@joined); 
+    background-image: -o-radial-gradient(@joined); 
+    background-image: -webkit-radial-gradient(@joined);
+}
+
+// the properties to use in each step
+@properties: ~'opacity: 0;', ~'opacity: 1;';
+
+// a mixin to create each step (@step is the step size in %)
+.make-keyframe(@step, @count) when (@count > 0) {
+    .make-keyframe(@step, (@count - 1) );
+    @pos: @step * (@count);
+    @{pos} {top: extract(@properties, @count);}
+}
+
+.make-keyframes(@name) {
+    @keyframes @name {
+        .make-keyframe(0%, length(@properties));
+    }
+    @-moz-keyframes @name {
+        .make-keyframe(0%, length(@properties));    
+    }
+    @-o-keyframes @name {
+        .make-keyframe(0%, length(@properties));    
+    }
+    @-webkit-keyframes @name {
+        .make-keyframe(0%, length(@properties)); 
+    }
+}
+
+.user-select {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+} // end user select
