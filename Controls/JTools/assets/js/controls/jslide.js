@@ -1,5 +1,5 @@
 // Validación del espacio de nombre principal "j"
-if(!window.j) window.j = (NameSpace ? new NameSpace() : {});
+if(!window.j) window.j = (Namespace ? new Namespace() : {});
 
 //---------------------------------
 // Espacio de nombre para crear un slide
@@ -311,11 +311,13 @@ if(!window.j) window.j = (NameSpace ? new NameSpace() : {});
             type: 'css', name: 'jslide-' + ctx.name,
             fnCallTag: function () {
                 var exLink = document.querySelectorAll('link[data-name="jslide-' + ctx.name + '"]');
-                if (exLink.length >= 2) exLink[0].parentNode.removeChild(exLink[0]);
+                if (exLink.length >= 2) {
+                    exLink[0].parentNode.removeChild(exLink[0]);
+                } // end if
                 // Se ejecuta la función de callback
                 setTimeout(ctx.fnCall, 2000);
             }, // end function
-            isNew: true
+            repeatTag: true
         });
 
         // Para que cada slide los items que nos son el actual tenga una medida 
@@ -326,8 +328,10 @@ if(!window.j) window.j = (NameSpace ? new NameSpace() : {});
         if(ctx.withTouch) {
             // Se agrega el evento touch
             var slide = document.querySelector(qSlide);
-            slide.addEventListener('touchstart', fnTouchHandler, false);
-            slide.addEventListener('touchend', fnTouchHandler, false);    
+            if(slide) {
+                slide.addEventListener('touchstart', fnTouchHandler, false);
+                slide.addEventListener('touchend', fnTouchHandler, false);
+            } // end if
         } // end if
         
         function fnTouchHandler(e) {

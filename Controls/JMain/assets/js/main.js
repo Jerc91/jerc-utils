@@ -137,24 +137,32 @@
     /*
         //---------------------------------
         // Estructura para los nombre de espacios
-        // Ejemplo: var myApp = new NameSpace();
+        // Ejemplo: var myApp = new Namespace();
         // Para crear un modulo myApp.fnAddNS('modulA');
         // myApp.modulA = {object}
         //---------------------------------
+        // Parametros:
+        //---------------------------------
+        // @ns: Espacio de nombres
+        //---------------------------------
     */
-    function NameSpace() {
-        this.Author = '';
-        this.Created = '';
-        this.Description = '';
-        this.Title = '';
+    function Namespace(ns) {
         // Función para crear un nuevo nombre de espacio
         this.fnAddNS = function (name) {
             if (!name) return;
             if (!name.match(validateNS)) return;
             // Crea una propiedad si esta no existe
-            if (typeof this[name] == 'undefined') this[name] = new NameSpace();
+            if (typeof this[name] == 'undefined') this[name] = new Namespace();
             return this[name];
         }; // fin método AddNS
+
+        // Se genera un espacio de nombre por cada punto dentro de la variable ns
+        if(ns && ns.indexOf('.')) {
+            var ctx = this;
+            ns.split('.').forEach(function(name) {
+                ctx = ctx.fnAddNS(name);
+            }); // end forEach
+        } // end if
     } // fin método
     //---------------------------------
 
@@ -188,7 +196,7 @@
 
     /*
         //---------------------------------
-        // Valida que el objeto herede de la función Assembly
+        // Valida que el objeto herede de la función Namespace
         //---------------------------------
         // Parámetros:
         //---------------------------------
@@ -199,7 +207,7 @@
     */
     function fnDepenciesTrue(dependencies) {
         if (!dependencies) return false;
-        if (dependencies.constructor === Assembly) if (!dependencies) return false;
+        if (dependencies.constructor === Namespace) if (!dependencies) return false;
         if (dependencies.constructor === Array) for (var i in dependencies) if (!dependencies[i]) return false;
         return true;
     } // end method
@@ -613,7 +621,7 @@
     //---------------------------------
 
     // -Métodos para NameSpacing
-    this.NameSpace = NameSpace;
+    this.Namespace = Namespace;
     this.fnImport = fnImport;
     this.fnDepenciesTrue = fnDepenciesTrue;
     // Métodos para peticiones asícronas
@@ -655,7 +663,7 @@
 // Nombre de espacio principal Main for library
 // Se crea el nombre de espacio j, este será usada para el resto de plugins
 //---------------------------------
-var j = new NameSpace();
+var j = new Namespace();
 fnExtend(j, {
     Author: 'Julian Ruiz',
     Created: '2016-01-17',

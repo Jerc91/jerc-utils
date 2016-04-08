@@ -1,5 +1,5 @@
 // Validación del espacio de nombre principal "j"
-if(!window.j) window.j = (NameSpace ? new NameSpace() : {});
+if(!window.j) window.j = (Namespace ? new Namespace() : {});
 
 //---------------------------------
 // Espacio de nombre para generar animaciones para esperas
