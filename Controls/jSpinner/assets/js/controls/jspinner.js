@@ -12,17 +12,18 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
 		//---------------------------------
 		// Parámetros:
 		//---------------------------------
-		// @d: 			Objeto contenedor de los parámetros.
-		// @d.query:	Query selector que contiene el spinner.
-		// @d.relative:	Si esta en true se eliminará position relative al contenedor
+		// @d: 				Objeto contenedor de los parámetros.
+		// @d.query:		Query selector que contiene el spinner.
+		// @d.relative:		Si esta en true se eliminará position relative al contenedor
+		// @d.fnCallBack:	Función de callback
 		//---------------------------------
 		// Contexto @ctx(this):	Instancia del jspinner
 		//----------------------------------
 	*/
 	function fnUnBlockUI(d) {
  		var ctx = this;
- 		var query = d ? d.query : null;
- 		var elemento = ctx ? ctx.elemento : null;
+ 		var query = (d && d.query) ? d.query : null;
+ 		var elemento = (ctx && ctx.elemento) ? ctx.elemento : null;
 
 	    setTimeout(function () {
 	    	var content = elemento || document.querySelector(query || 'body');
@@ -32,13 +33,20 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
 	        
 	        setTimeout(function() { 
 	        	block.classList.add('none');
+
 	        	if(!d) return;
+
 	        	/*
 					// se elimina la clase posRelav, que contiene el estilo 
 					// potition relative
 				*/
-				if (d.relative) content.parentNode.classList.remove('posRelav');
-				block.parentNode.removeChild(block);
+				if (d.relative) {
+					content.parentNode.classList.remove('posRelav');
+					block.parentNode.removeChild(block);
+				}  // end if				
+
+				// Se ejecuta el callback
+				if(fnIsFunction(d.fnCallback)) d.fnCallback();
 			}, 500); // end remove .none
 		}, 500); // end remove .out
 	} // fin método

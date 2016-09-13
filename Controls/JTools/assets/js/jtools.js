@@ -514,13 +514,7 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
                 'options_in': options_in,
                 'effect_out': effect_out,
                 'options_out': options_out
-            },
-            /*
-                buttons: {
-                    closer_hover: false,
-                    sticker_hover: false
-                },
-            */
+            }
         } // end objDefault
 
         $.extend(objDefault, data);

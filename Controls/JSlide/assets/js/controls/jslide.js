@@ -28,11 +28,13 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
         if (fnShowButton.call(ctx, activeItem)) return;
         
         ctx.active = true;
+
         // Se valida el final del slide
+        ul.classList.remove(classString);
         if (activeItem < ctx.list) {
-            ul.classList.remove(classString);
             ul.classList.add("a" + (activeItem));  
         } // end if
+
         setTimeout(function () { ctx.active = false }, 300);
         fnSetActive(qSlide);
     } // end mehod
@@ -56,9 +58,11 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
         if (fnShowButton.call(ctx, activeItem)) return;
 
         ctx.active = true;
+
         // Se valida el inicio del slide
         ul.classList.remove(classString);
         if (activeItem > 0) ul.classList.add("a" + (activeItem));
+
         setTimeout(function () { ctx.active = false }, 300);
         fnSetActive(qSlide);
     } // end method
@@ -89,7 +93,7 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
 
         if (!btn1 || !btn2) return;
 
-        if (activeItem == -1) {
+        if (activeItem == -1 || activeItem == (-1 * ctx.maxElementsShow)) {
             btn1.classList.add(classDisabled);
             return true;
         } // end if
