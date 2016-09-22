@@ -1,0 +1,34 @@
+{
+  "name": "jerc-utils",
+  "authors": [
+    "Julian Ruiz <jerc.691@gmail.com>"
+  ],
+  "description": "Librerias para carga de archivos guardando en cache la respuesta de estos, spinners animados para mostrar en una espera, herramientas para formularios, un slide en base a CSS dinámico, y un lightbox.",
+  "main": [
+    "dist/JMain/service-worker.min.js",
+    "dist/JMain/js/polyfills/fetch.min.js",
+    "dist/JMain/js/workers/worker-import.min.js",
+    "dist/JMain/js/workers/worker-tools.js",
+    "dist/JMain/js/jmain.min.js",
+    "dist/JSpinner/css/jspinner.min.css",
+    "dist/JSpinner/js/jspinner.min.js",
+    "dist/JTools/js/jtools.min.js",
+    "dist/JSlide/css/jslide.min.css",
+    "dist/JSlide/js/jslide.min.js",
+    "dist/JLightbox/css/jlightbox.min.css",
+    "dist/JLightbox/js/jlightbox.min.js"
+  ],
+  "keywords": [
+    "jerc-utils", "jmain", "jspinner", "jtools", "jslide", "jlightbox"
+  ],
+  "license": "MIT",
+  "homepage": "jerc91.highub.io",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "packages",
+    "test",
+    "tests"
+  ]
+}

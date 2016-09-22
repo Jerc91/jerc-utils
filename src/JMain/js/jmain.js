@@ -625,7 +625,7 @@
         if(opciones) {
             _cantidadWorkers = opciones.workersCount;
             opciones.srcFiles = opciones.srcFiles || 'assets/config/filesToUpdate.json';
-            window.useServiceWorker = opciones.useSW && !!navigator.serviceWorker;
+            window.useServiceWorker = opciones.useSW && !!navigator.serviceWorker && window.ssl;
         } // end if
 
         // Se verifica la cache y se actualiza esta
