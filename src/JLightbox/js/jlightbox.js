@@ -1,5 +1,9 @@
-// Validación del espacio de nombre principal "j"
-if(!window.j) window.j = (Namespace ? new Namespace() : {});
+// TODO; 
+// Usar depencia a jmain.js
+// Quitar la información del plugin como objeto de js y dejarlo como comentario como todos los plugins
+// cambiar para que se inicie solo
+// Quitar timeout y dejar evento de transición
+// Usar clone, and replaceWith
 
 //---------------------------------
 // Espacio de nombre para crear un lightbox
@@ -9,53 +13,92 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
     //---------------------------------
     // Propiedades privadas
     //---------------------------------
-    var identifier = "lightbox", 
+    var ctx = this,
+        identifier = "lightbox",
         classWrapper = "lightbox",
-        classContent = "content", 
+        classContent = "content",
         classContentLB = "contentLB",
-        classOut = "out", 
-        classIn = "in", 
-        classInactiv = "inactived",
-        classBg = "bg", 
-        classClose = "close fa fa-times-circle", 
+        classOut = "out",
+        classIn = "in",
+        classActive = "active",
+        classInactived = "inactived",
+        classBg = "bg",
+        classClose = "close fa fa-times-circle",
         active = false;
 
 
-     /*
-        //---------------------------------
-        // Function para mostrar el Lightbox, al inicio se muestra una animación.
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // html:    Es el html que contendrá el lightbox.
-        // removeEvents:    Si se pasa éste parámetro se quitarán los eventos,
-        //                  click y keydown para ocultar el lightbox, se mantendrá
-        //                  visible.
-        //---------------------------------
+    /*
+       //---------------------------------
+       // Function para mostrar el Lightbox, al inicio se muestra una animación.
+       //---------------------------------
+       // Parámetros:
+       //---------------------------------
+       // html:            Es el html que contendrá el lightbox.
+       // removeEvents:    Si se pasa éste parámetro se quitarán los eventos,
+       //                  click y keydown para ocultar el lightbox, se mantendrá
+       //                  visible.
+       //---------------------------------
     */
     function fnShow(html, removeEvents) {
+        var ctx = this,
+            popup = ctx.popup = document.getElementById(identifier),
+            popupClone = ctx.popup.cloneNode(true),
+            popupBg = popupClone.querySelector(`.${classBg}`),
+            popupClose = popupClone.querySelector(`.${classClose.replace(/ /g, '.')}`),
+            contentLB = popupClone.querySelector(`.${classContentLB}`),
+            content = popupClone.querySelector(`.${classContent}`),
+            contenedorPopup = popup.parentNode;
 
-        var popup = document.getElementById(identifier);
-        popup.className = classIn;
-        popup.querySelector(' .' + classContentLB).innerHTML = html;
+        // Asignación HTML, Node
+        if (typeof html === 'string') 
+            html = document.createRange().createContextualFragment(html);
+        if(contentLB.firstElementChild) contentLB.removeChild(contentLB.firstElementChild);
+        popupClone.querySelector(`.${classContentLB}`).appendChild(html);
 
-        active = true;
-
-        if (popup) {
-            // Se agrega la función de ocultar el lightbox al botón x
-            popup.getElementsByClassName(classBg)[0].addEventListener('click', fnClose);
-            popup.getElementsByClassName(classClose)[0].addEventListener('click', fnClose);
-            document.querySelector('body').addEventListener('keydown', fnKeyDown); // key down
+        if (popupClone) {
+            // Bg
+            popupBg.handlerClick = popupBg.handlerClick || fnHide.bind(ctx, null);
+            popupBg.removeEventListener('click', popupBg.handlerClick);
+            popupBg.addEventListener('click', popupBg.handlerClick);
+            // Close
+            popupClose.handlerClick = popupClose.handlerClick || fnHide.bind(ctx, null);
+            popupClose.removeEventListener('click', popupClose.handlerClick);
+            popupClose.addEventListener('click', popupClose.handlerClick);
+            // KeyDown
+            contenedorPopup.handlerKeyDown && contenedorPopup.removeEventListener('keydown', contenedorPopup.handlerKeyDown);
+            contenedorPopup.handlerKeyDown = fnKeyDown.bind(ctx);
+            contenedorPopup.addEventListener('keydown', contenedorPopup.handlerKeyDown);
         } // end if popup
 
         // Se eliminan los eventos para que se cierre el documento
-        if(removeEvents) {
-            popup.classList.add(classInactiv);
-            popup.querySelector('.' + classBg).removeEventListener('click', fnClose);
-            popup.querySelector('.' + classClose.replace(/ /g, '.')).removeEventListener('click', fnClose);
-            document.querySelector('body').removeEventListener('keydown', fnKeyDown); // key down
+        if (removeEvents) {
+            popupClone.classList.add(classInactived);
+            popupBg.removeEventListener('click', popupBg.handlerClick);
+            popupClose.removeEventListener('click', popupClose.handlerClick);
+            contenedorPopup.handlerKeyDown && contenedorPopup.removeEventListener('keydown', contenedorPopup.handlerKeyDown);
         } // end if
-    } // end function
+
+        content.handlerAnimationStart = content.handlerAnimationStart || fnHandlerAnimationStart.bind(ctx);
+        content.handlerAnimationEnd = content.handlerAnimationEnd || fnHandlerAnimationEnd.bind(ctx);
+
+        content.removeEventListener('animationstart', content.handlerAnimationStart);
+        content.addEventListener('animationstart', content.handlerAnimationStart);
+
+        content.removeEventListener('animationend', content.handlerAnimationEnd);
+        content.addEventListener('animationend', content.handlerAnimationEnd);
+
+        ctx.content = content;
+        ctx.animationsCount = 0;
+
+        popupClone.classList.add(classIn);
+        popupClone.classList.add(classActive);
+        popup.replaceWith(popupClone);
+
+        ctx.active = true;
+        ctx.popup = document.getElementById(identifier);
+
+        return ctx;
+    }
     //---------------------------------
 
     /*
@@ -63,17 +106,21 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
         // Function para ocultar el Lightbox, al finalizar se muestra una animación
         //---------------------------------
     */
-    function fnClose() {
-        var popup = document.getElementById(identifier);
+    function fnHide(e) {
+        var ctx = this,
+            popup = ctx.popup || document.getElementById(identifier);
+        ctx.popup = popup;
+
+        if(e && !ctx.popup.isEqualNode(e.target)) return;
 
         if (popup) {
-            popup.className = classOut;
-            popup.classList.remove(classInactiv);
-            setTimeout(function () { popup.className = identifier; active = false; }, 800);
-        } // end if
+            popup.classList.remove(classIn);
+            popup.classList.remove(classInactived);
+            popup.classList.add(classOut);
+        }
 
-        return false;
-    }; // end function
+        return ctx;;
+    }
     //---------------------------------
 
     /*
@@ -85,12 +132,57 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
         // e:   Evento
         //---------------------------------
     */
-    function fnKeyDown(e){
-        if (e.keyCode == 27 && active) {
-            fnClose();
-        } // end if
-    } // end function
+    function fnKeyDown(e) {
+        var ctx = this;
+        if (e.keyCode == 27) {
+            ctx.hide();
+        }
+    }
     //---------------------------------
+
+    /*
+        //---------------------------------
+        // Función para controlar el inicio de la animación
+        //---------------------------------
+        // Parámetros:
+        //---------------------------------
+        // e:   Evento
+        //---------------------------------
+    */
+    function fnHandlerAnimationStart(e) {
+        e.preventDefault();
+
+        var ctx = this;
+        if(!ctx.content.isEqualNode(e.target)) return;
+        
+        ++ctx.animationsCount;
+        return ctx;
+    }
+
+    /*
+        //---------------------------------
+        // Función para controlar el fin de la animación
+        //---------------------------------
+        // Parámetros:
+        //---------------------------------
+        // e:   Evento
+        //---------------------------------
+    */
+    function fnHandlerAnimationEnd(e) {
+        e.preventDefault();
+
+        var ctx = this;
+        if(!ctx.content.isEqualNode(e.target)) return;
+
+        ctx.active = true;
+        if(ctx.animationsCount >= 2) {
+            ctx.animationsCount = 0;
+            ctx.popup.className = identifier;
+            ctx.active = false;
+        }
+
+        return ctx;
+    }
 
     /*
         //---------------------------------
@@ -102,57 +194,89 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
         //          el elemento body, será quien contenga el lightbox
         //---------------------------------
     */
-    function fnInit(qParent) {
-        var query = '#' + identifier + ' .' + classClose.replace(/ /g, '.');
-        var closeN = document.querySelector(query);
-        if(!closeN) {
-            // SE crea el contenedor del lightbox
-            var wrapper = document.createElement('div');
+    function JLightbox(qParent) {
+        var ctx = this,
+            query = '#' + identifier + ' .' + classClose.replace(/ /g, '.'),
+            closeN = document.querySelector(query);
+
+        if (!closeN) {
+            // Se crea el contenedor del lightbox
+            var wrapper = document.createElement('div'),
+                content = document.createElement('div'),
+                contentLB = document.createElement('div'),
+                bg = document.createElement('a');
+
             wrapper.id = identifier;
             wrapper.classList.add(classWrapper);
+
             // Se crea el contenido del lighbox
-            var content = document.createElement('div');
             content.classList.add(classContent);
             // Se crea el botón de cerrar
             closeN = document.createElement('a');
             closeN.setAttribute('class', classClose);
             closeN.setAttribute('title', 'cerrar');
             // Se crea el contenido del lightbox
-            var contentLB = document.createElement('div');
             contentLB.classList.add(classContentLB);
             // Se crea el fondo
-            var bg = document.createElement('a');
             bg.classList.add(classBg);
             // Se adicionan los eleemntos de cada uno
-            wrapper.appendChild(content);
-            wrapper.appendChild(bg);
             content.appendChild(closeN);
             content.appendChild(contentLB);
+            wrapper.appendChild(content);
+            wrapper.appendChild(bg);
+            ctx.popup = wrapper;
+
             // Se adiciona el lightbox al elemento indicado
             document.querySelector(qParent || 'body').appendChild(wrapper);
         } // end else
-        // Se inhabilita el link de cerrar
-        closeN.setAttribute('href','javascript:void(0)');
-    } // end function
+
+        return ctx;
+    }
+    //---------------------------------
+
+    /*
+        //---------------------------------
+        // Función para simular una estructura de promise
+        //---------------------------------
+        // Parameters: 
+        //---------------------------------
+        // @cb: Función de callback
+        //---------------------------------
+    */
+    function fnThen(resolve, reject) {
+        var ctx = this;       
+        
+        if(ctx.animationsCount == 1) ctx.callback = resolve; // Show        
+        else if(!ctx.animationsCount == 0) ctx.callback = resolve; // Hide
+        else resolve();
+
+        return ctx;
+    }
+    //---------------------------------
+
+    // Public API (Events)
+    JLightbox.prototype.show = fnShow;
+    JLightbox.prototype.hide = fnHide;
+    JLightbox.prototype.then = fnThen;
+
+    /*
+        //---------------------------------
+        // Función para obtener la instancia del JSlide
+        //---------------------------------
+    */
+    function fnGetInstance(_args) {
+        return new JLightbox(_args);
+    }
     //---------------------------------
 
     //---------------------------------
     // Public APi
     //---------------------------------
-    this.fnClose = fnClose;
-    this.fnShow = fnShow;
-    this.fnInit = fnInit;
+    fnGetInstance.show = fnShow;
+    fnGetInstance.hide = fnHide;
 
-}).apply(j.fnAddNS ? j.fnAddNS("jlightbox") : j);
-//---------------------------------
-
-//---------------------------------
-if(fnExtend) {
-    fnExtend(j, {
-        Author: 'Julian Ruiz',
-        Created: '2016-01-17',
-        Page: 'http://jerc91.github.io/#!/JLightbox',
-        Title: 'JLightbox'
-    }); // fin combinación
-} // end if
+    jr.addNS("jlightbox", fnGetInstance);
+    jr.jlightbox.show = fnShow;
+    jr.jlightbox.hide = fnHide;
+})();
 //---------------------------------

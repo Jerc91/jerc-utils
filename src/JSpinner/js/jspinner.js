@@ -1,10 +1,103 @@
-// Validación del espacio de nombre principal "j"
-if(!window.j) window.j = (Namespace ? new Namespace() : {});
+// Usar depencia a jmain.js
+// Quitar la información del plugin como objeto de js y dejarlo como comentario como todos los plugins
 
 //---------------------------------
 // Espacio de nombre para generar animaciones para esperas
 //---------------------------------
-(function() {
+(function () {
+
+	/*
+		//---------------------------------
+		// Función para bloquear la pantalla con un spinner o
+		// agregar el spinner dentro de un elemento
+		//---------------------------------
+		// Parámetros:
+		//---------------------------------
+		// @d: 				Objeto contenedor de los parámetros.
+		// @d.query:		Query selector del elemento contenedor del spinner
+		// @d.theme:		Número de spinner que se quiere mostrar.
+		// @d.relative:		Si esta en true se agregará position relative al contenedor
+		// @d.wrapper:		Se usa para buscar dentro de ese elemento con querySelector
+		//---------------------------------
+		// Contexto @ctx(this):	Instancia del plugin
+		//---------------------------------
+	*/
+	function fnShow(d) {
+		// Se crea un objeto 
+		var ctx = this;
+		
+		return new Promise(function(resolve, reject) {
+			var fragment;
+
+			// Se crea una instancia del spinner
+			if(!(ctx instanceof instance)) {
+				ctx = d || {};
+				ctx.theme = ctx.theme || Math.floor(Math.random() * 14) + 1;
+				ctx.content = (ctx.wrapper || document).querySelector(ctx.query || 'body');
+				ctx.elemento = ctx.content.querySelector('.blockUI');
+			}
+
+			// Si el elemento contenedor no existe
+			if (!ctx.content) return;
+
+			/*
+				// se agrega la clase posRelav, que contiene el estilo 
+				// potition relative
+			*/
+			if (ctx.relative) ctx.content.classList.add('posRelav');
+
+			// Si no se tiene un elemento con clase .blockUI se creará nuevo
+			if (!ctx.elemento) {
+				ctx.elemento = document.createElement('div');
+				// Se agrega el nuevo elemento en el contenedor
+				ctx.content.appendChild(ctx.elemento);
+			} // end if
+			ctx.elemento.setAttribute('class', 'blockUI none');
+
+			// Se elimina el spinner dentro
+			if (ctx.elemento.children.length > 0) {
+				ctx.elemento.removeChild(ctx.elemento.children[0]);
+			} // end if
+
+			// Se crea el spinner
+			ctx.spinner = document.createElement('div');
+			ctx.spinner.classList.add('spinner');
+			ctx.elemento.classList.add('a' + ctx.theme);
+			ctx.spinner.classList.add('a' + ctx.theme);
+			ctx.elemento.appendChild(ctx.spinner);
+
+			// Se crea el tema al azar
+			switch (parseInt(ctx.theme)) {
+				case 1: fragment = fnGetHTML('double-bounce', 2, true); break;
+				case 2: fragment = fnGetHTML('rect', 5, true); break;
+				case 3: fragment = fnGetHTML('cube', 2, true); break;
+				case 4: fragment = fnGetHTML('dot', 2, true); break;
+				case 5: fragment = fnGetHTML('bounce', 3, true); break;
+				case 6: fragment = fnGetHTML('cube', 9); break;
+				default: fragment = fnGetHTML('circle', 1); break;
+			} // end switch
+
+			ctx.spinner.appendChild(fragment);
+			ctx.elemento.classList.remove('off');
+			ctx.elemento.classList.add('on');
+
+			// Validar cual es mejor, Finalización de animación
+			requestAnimationFrame(() => resolve(ctx));
+		});
+
+		// Función para crear los diferentes divs por cada tema
+		function fnGetHTML(clase, elementos, incrementable) {
+			var frag, div;
+			frag = document.createDocumentFragment();
+			for (var i = 0; i < elementos; i++) {
+				div = document.createElement('div');
+				div.classList.add(clase + (incrementable ? (i + 1) : ''));
+				frag.appendChild(div);
+			} // end for
+			return frag;
+		} // end funciton
+	} // end method
+	//---------------------------------
 
 	/*
 		//---------------------------------
@@ -16,162 +109,91 @@ if(!window.j) window.j = (Namespace ? new Namespace() : {});
 		// @d.query:		Query selector que contiene el spinner.
 		// @d.relative:		Si esta en true se eliminará position relative al contenedor
 		// @d.fnCallBack:	Función de callback
+		// @d.wrapper:		Se usa para buscar dentro de ese elemento con querySelector
 		//---------------------------------
 		// Contexto @ctx(this):	Instancia del jspinner
 		//----------------------------------
 	*/
-	function fnUnBlockUI(d) {
- 		var ctx = this;
- 		var query = (d && d.query) ? d.query : null;
- 		var elemento = (ctx && ctx.elemento) ? ctx.elemento : null;
+	function fnHide(d) {
+		var ctx = this;
 
-	    setTimeout(function () {
-	    	var content = elemento || document.querySelector(query || 'body');
-	        var block = !elemento ? content.querySelector('.blockUI') : elemento;
-	        if(!block) return;
-	        block.classList.add('out');
-	        
-	        setTimeout(function() { 
-	        	block.classList.add('none');
+		return new Promise(function(resolve, reject) {
+			// Se crea una instancia del spinner
+			if(!(ctx instanceof instance)) {
+				ctx = d || {};
+				ctx.theme = ctx.theme || Math.floor(Math.random() * 14) + 1;
+				ctx.content = (ctx.wrapper || document).querySelector(ctx.query || 'body');
+				ctx.elemento = ctx.content.querySelector('.blockUI');
+			}
 
-	        	if(!d) return;
+			if(!ctx.elemento) resolve(ctx);
+			if(!ctx.elemento.style.transition) resolve(ctx);
 
-	        	/*
-					// se elimina la clase posRelav, que contiene el estilo 
-					// potition relative
-				*/
-				if (d.relative) {
-					content.parentNode.classList.remove('posRelav');
-					block.parentNode.removeChild(block);
-				}  // end if				
+			ctx.elemento.removeEventListener('transitionend', handler, false);
+    		ctx.elemento.addEventListener('transitionend', handler, false);	
 
-				// Se ejecuta el callback
-				if(fnIsFunction(d.fnCallback)) d.fnCallback();
-			}, 500); // end remove .none
-		}, 500); // end remove .out
+			ctx.elemento.classList.remove('on');
+			ctx.elemento.classList.add('off');
+
+			function handler(e) {
+				requestAnimationFrame(() => {
+					e.stopPropagation();
+					if(e.propertyName !== 'opacity') return;
+
+					/*
+						// se elimina la clase posRelav, que contiene el estilo 
+						// potition relative
+					*/
+					if (ctx.relative && ctx.elemento.parentNode) {
+						ctx.content.parentNode.classList.remove('posRelav');
+						ctx.elemento.parentNode.removeChild(ctx.elemento);
+		        	}
+
+					resolve(ctx);
+				});
+			}
+		});
 	} // fin método
 	//---------------------------------
 
-
 	/*
 		//---------------------------------
-		// Función para bloquear la pantalla con un spinner o
-		// agregar el spinner dentro de un elemento
-		//---------------------------------
-		// Parámetros:
-		//---------------------------------
-		// @d: 					Objeto contenedor de los parámetros.
-		// @d.query:			Query selector del elemento contenedor del spinner
-		// @d.theme:			Número de spinner que se quiere mostrar.
-		// @d.relative:	Si esta en true se agregará position relative al contenedor
-		//---------------------------------
-		// Contexto @ctx(this):	Instancia del plugin
+		// Función módelo para ocupar un espacio de memoria entre varias instancias
 		//---------------------------------
 	*/
-	function fnBlockUI(d) {
+	function instance(options) {
 		// Se crea un objeto 
-		var ctx = this, fragment;
-		d = d || ctx;
-		var query = d ? d.query : null;
+		var ctx = this;
+		
+		Object.assign({
+			query: 'body',
+			relative: false
+		}, ctx, options);
 
 		// Se crea una instancia del spinner
-		d.theme = d.theme || Math.floor(Math.random() * 14) + 1;
-		d.content = document.querySelector(d.query || 'body');
-		d.elemento = d.content.querySelector('.blockUI');
-		
-		// Si el elemento contenedor no existe
-		if(!d.content) return;
+		ctx.content = (ctx.wrapper || document).querySelector(ctx.query || 'body');
+		ctx.elemento = ctx.content.querySelector('.blockUI');
+		ctx.theme = ctx.theme || Math.floor(Math.random() * 14) + 1;
 
-		/*
-			// se agrega la clase posRelav, que contiene el estilo 
-			// potition relative
-		*/
-		if (d.relative) d.content.classList.add('posRelav');
+		// Public API
+		ctx.block = fnShow;
+		ctx.hide = fnHide;
 
-		// Si no se tiene un elemento con clase .blockUI se creará nuevo
-		if(!d.elemento) {
-			d.elemento = document.createElement('div');
-			// Se agrega el nuevo elemento en el contenedor
-			d.content.appendChild(d.elemento);
-		} // end if
-		d.elemento.setAttribute('class', 'blockUI none');
-
-		// Se elimina el spinner dentro
-		if(d.elemento.children.length > 0) {
-			d.elemento.removeChild(d.elemento.children[0]);
-		} // end if
-
-		// Se crea el spinner
-		d.spinner = document.createElement('div');
-		d.spinner.classList.add('spinner');
-		d.elemento.classList.add('a' + d.theme);
-		d.spinner.classList.add('a' + d.theme);	
-		d.elemento.appendChild(d.spinner);
-		
-		// Se crea el tema al azar
-		switch (parseInt(d.theme)) {
-		    case 1: fragment = fnGetHTML('double-bounce', 2, true); break;
-		    case 2: fragment = fnGetHTML('rect', 5, true); break;
-		    case 3: fragment = fnGetHTML('cube', 2, true); break;
-		    case 4: fragment = fnGetHTML('dot', 2, true); break;
-		    case 5: fragment = fnGetHTML('bounce', 3, true); break;
-		    case 6: fragment = fnGetHTML('cube', 9); break;
-		    default: fragment = fnGetHTML('circle', 1); break;
-		} // end switch
-		
-		d.spinner.appendChild(fragment);
-		d.elemento.classList.remove('none');
-		d.elemento.classList.remove('out');
-
-		// Función para crear los diferentes divs por cada tema
-		function fnGetHTML(clase, elementos, incrementable) {
-		    var frag, div;
-		    frag = document.createDocumentFragment();
-		    for (var i = 0; i < elementos; i++) {
-		        div = document.createElement('div');
-		        div.classList.add(clase + (incrementable ? (i + 1) : ''));
-		        frag.appendChild(div);
-		    } // end for
-		    return frag;
-		} // end funciton
-	} // end method
+		return ctx;
+	} // end function
 	//---------------------------------
-	
-	/*
-        //---------------------------------
-        // Función módelo para ocpar un espacio de memoria entre varias instancias
-        //---------------------------------
-    */
-    function instance() {
-        // Public API
-        this.fnUnBlockUI = fnUnBlockUI;
-		this.fnBlockUI = fnBlockUI;
-    } // end function
-    //---------------------------------
-
-    /*
-	    //---------------------------------
-	    // Función para obtener la instancia del JSpinner
-	    //---------------------------------
-    */
-    function fnGetInstance() {
-        return new instance();
-    } // enf function
-    //---------------------------------
 
 	// Public API
-	this.fnUnBlockUI = fnUnBlockUI;
-	this.fnBlockUI = fnBlockUI;
-	this.fnGetInstance = fnGetInstance;
-}).call(j.fnAddNS('jspinner'));
+	/*
+        //---------------------------------
+        // Función para obtener la instancia del JSlide
+        //---------------------------------
+    */
+    function fnGetInstance(options) {
+        return new instance(options);
+    } // end fnGetInstance
 
-//---------------------------------
-if(fnExtend) {
-    fnExtend(j, {
-        Author: 'Julian Ruiz',
-        Created: '2016-01-17',
-        Page: 'http://jerc91.github.io/#!/JSpinner',
-        Title: 'JSpinner'
-    }); // fin combinación
-} // end if
-//---------------------------------
+    jr.addNS("jspinner", fnGetInstance);
+	jr.jspinner.show = fnShow;
+    jr.jspinner.hide = fnHide;
+})();

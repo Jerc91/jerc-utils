@@ -1,26 +1,26 @@
-// Variable para cada explorador
+// TODO: 
+// Para no leer del disco usar una lista de la url del archivo y y la fecha de inserción al cache usando indexdb
+
+// Variables globales
 self.requestFileSystemSync = self.webkitRequestFileSystemSync || self.requestFileSystemSync;
-if(!self.Promise) self.importScripts('https://www.promisejs.org/polyfills/promise-6.1.0.js');
-if(!self.Request) self.importScripts('../polyfills/fetch.js');
-if(!self.tools) self.importScripts('worker-tools.js');
-
-// Varables del módulo
-var ajax = {};
-
-// Si se desea guardar de forma permanente las archivos esta es la medidas
-var constFs = {
-    SIZEFILES: 10 * 1024 * 1024,
-    READ: { create: 0 },   // Objeto par cuando se quiere leer
-    WRITE: { create: 1 }   //  Objeto par cuando se quiere guardar
-};
+self.importScripts('requester-tools.js');
+self.requester = {};
 
 // Definición del módulo
 (function () {
-    // Objeto principal
-    var fs = null;       // Sistema de archivos API
-            
+    // Si se desea guardar de forma permanente las archivos esta es la medidas
+    var constFs = {
+        SIZEFILES: 10 * 1024 * 1024,
+        READ: { create: 0 },   // Objeto par cuando se quiere leer
+        WRITE: { create: 1 }   //  Objeto par cuando se quiere guardar
+    };
+
+    // Sistema de archivos API
+    var fs = null;
+
     // Compatibilidad con navegadores para que no se genere errores
     if (self.requestFileSystemSync) fs = fs || self.requestFileSystemSync(TEMPORARY, constFs.SIZEFILES);
+    self.tools.factoryError(fnHandleMessagesError);
 
     /*
         //---------------------------------
@@ -40,7 +40,7 @@ var constFs = {
         try {
             // Esto se hace cuando no se quiere guardar el archivo en el navegador
             if (!data.cache || !fs) {
-                return self.tools.ajax.send(data);
+                return self.tools.send(data);
             } // fin if cache
 
             // Propiedad para evaluar si se va a actualizar o no el archivo
@@ -55,14 +55,11 @@ var constFs = {
                 // de la última modificación, con la fecha que se encuentra en el archivo local y si es mayor la fecha 
                 // del objeto es mayor a la del local entonces se hace la petición al servidor y se gaurda en el navegador.
             */
-            if(data.file && data.file.jdate > Date.parse(data.blob.lastModifiedDate)) { 
-                return self.tools.ajax.send(data);
+            if (!isNaN(data.jdate) && data.jdate > Date.parse(data.blob.lastModifiedDate)) {
+                return self.tools.send(data);
             } else {
                 data.update = false;
-                return new Promise(function (resolve, reject) {
-                    try { resolve(self.tools.ajax.getObject(data)); }
-                    catch(e) { reject(e); }
-                });
+                return self.tools.getObject(data);
             } // end else
         } // end try 
         catch (e) {
@@ -70,8 +67,8 @@ var constFs = {
                 // Cuando se genera éste error al hacer la petición a través de la interfaz FileSystem 
                 // se realiza la petición al servidor
             */
-            if (e.toString().indexOf('NotFoundError') > -1) return self.tools.ajax.send(data);
-            else self.tools.ajax.error(e, data.name);
+            if (e.toString().indexOf('NotFoundError') > -1) return self.tools.send(data);
+            else self.tools.error(e, data.name);
         } // fin catch
     } // finend function
     //---------------------------------
@@ -88,19 +85,20 @@ var constFs = {
     */
     function fnSaveFile(data, response) {
         var respuesta = response.clone();
-        return respuesta.blob().then(function(blob) { 
+        return respuesta.blob().then(function (blob) {
             // Se crea o se lee el archivo
-            var fileEntry = fs.root.getFile(data.name, constFs.WRITE);
+            var fileEntry = fs.root.getFile(data.name, constFs.WRITE),
+                fileWriter;
             // Se elimina el archivo
             fileEntry.remove();
             // Se vuelve a crear el archivo
             fileEntry = fs.root.getFile(data.name, constFs.WRITE);
             // Se escribe el archivo
-            var fileWriter = fileEntry.createWriter();
+            fileWriter = fileEntry.createWriter();
             fileWriter.write(blob);
-            
+
             return blob;
-        }).catch(function(err) { self.tools.ajax.error(new Error(err).stack); });
+        }).catch(self.tools.error);
     } // fin método
     //---------------------------------
 
@@ -110,10 +108,10 @@ var constFs = {
         //---------------------------------
     */
     function fnDeleteFiles() {
-        var reader = fs.root.createReader();
-        var files = reader.readEntries();
-        
-        for(var i in files) {
+        var reader = fs.root.createReader(),
+            files = reader.readEntries();
+
+        for (var i in files) {
             files[i].remove();
         } // end for
 
@@ -125,25 +123,43 @@ var constFs = {
     } // end function
     //---------------------------------
 
+    /*
+        //---------------------------------
+        // Se envia a los clientes el mensaje que se pasa como párametro
+        //---------------------------------
+        // Parámetros:
+        //---------------------------------
+        // @msj:    {object}    Información de la petición a realizar.
+        //---------------------------------
+    */
+    function fnHandleMessagesError(msj) {
+        console.trace(msj);
+    } // fin método
+    //---------------------------------
+
     // Public API
     this.getFile = fnGetFile;
     this.save = fnSaveFile;
     this.removeAll = fnDeleteFiles;
-}).apply(ajax);
-// End namespace ajax
+}).apply(self.requester);
+// End namespace requester
 //---------------------------------
 
 //---------------------------------
 // Recepción del App
 self.addEventListener("message", function (e) {
-    var datos  = e.data;
-    datos.getFile = ajax.getFile;
-    datos.save = ajax.save;
+    var datos = e.data;
+    datos.getFile = self.requester.getFile;
+    datos.save = self.requester.save;
 
     // Init
     try {
-        self.tools.ajax.get(e.data).then(self.postMessage).catch(self.tools.ajax.error);
-    } catch(e) { console.log(datos); throw new Error(e); }
+        self.tools.get(e.data)
+            .then(self.postMessage)
+            .catch(self.tools.error);
+    } catch (e) {
+        self.tools.error(e);        
+    }
 });
 //---------------------------------
 
@@ -154,4 +170,24 @@ self.addEventListener("message", function (e) {
     var fs = requestFileSystemSync(TEMPORARY, localSizeFiles);
     var fileEntry = fs.root.getFile('test.css', write);
     fileEntry.remove();
+*/
+
+/*
+       TODO Hacer para que funcione con la nueva implementación
+                    // Si el arcvivo va hacer tratado como texto entonces se lee el archivo y 
+                    // se retorna el texto que hay dentro del archivo
+                
+                if (data.isText) {
+                    var reader = new FileReader();
+                    reader.addEventListener('load', function (e) {
+                        var result = e.target.result;
+                        data.text = (data.mime != MIMES.TEXT) && result.length ? JSON.parse(result) : result;
+                        resolve({ blob: data.blob, result: data.text, path: data.src, observedId: data.observedId });
+                    });
+                    reader.addEventListener('error', reject);
+                    reader.readAsText(data.blob);
+                } else {
+                    resolve({ blob: data.blob, result: data.text, path: data.src, observedId: data.observedId });
+                }
+
 */

@@ -1,242 +1,154 @@
+// TODO:
+// Se creo proxy, la configuración para los spinners debe hacerce en una configuración personal, mostrar un spinner cada vez que haga una petición similar a angular
+// Validar como carga por que no toma apenas actualizo la información
+// Validar respuestas nulas y con errores
+// mejorar granja de workers línea // Se obtiene el worker y se aumenta contador
+// Validar catch con fallas en cada promise
+// Mejorar patrón observer, sería bueno investigar sobre como interpretar diagramas
+// Validar peticiones a cors o a host terceros
+// Crear para automatizar pruebas, leer sobre ello
+// Se puede causar un error en el worker import, con _cantidadWorkers = undefined
+// Agregar un límite de peticiones
+// Validar que el singleton con una variable sin valor mantega la referencia de la función de creación
+// Validar las despendencias del serviceLocator y como estas se pueden pedir, y como impedir un abrazo de oso
+// Validar eliminación de los ns
+// Luego usar configuración para PWA's https://developers.google.com/web/fundamentals/app-install-banners/
+// Cambiar fnTagScriptLink para que sea el quien identifique la extensión si esta no se envía
+// Quitar la información del plugin como objeto de js y dejarlo como comentario como todos los plugins
+// Replacewith con los css createTagLink
+
+// TODO: Performance
+// Ver cual es más rapido si includes o indexOf
+// Verificar si un [...arguments] es más rápido que un for(var i )
+
+// TODO: ServiceWorkers
+// https://play.google.com/store/books/details?id=lEdt-AKB3iQC&rdid=book-lEdt-AKB3iQC&rdot=1&source=gbs_vpt_read&pcampaignid=books_booksearch_viewport
+// http://craig-russell.co.uk/2016/01/29/service-worker-messaging.html#.WWJimog1_IU
+// https://github.com/GoogleChrome/samples/tree/gh-pages/service-worker/post-message
+'use strict';
+
 //---------------------------------
 // Funciones globales, de uso común
 //---------------------------------
 (function () {
 
+    // Constantes
+    var FILESYSTEM_WORKER_PATH = 'assets/js/workers/filesystem-worker.js',
+        SERVICE_WORKER_PATH = './service-worker.js',
+        FILES_UPDATE_PATH = 'assets/config/filesToUpdate.json',
+        QUERY_CONTAINER_TAGS_GET = 'dvContainerJGet',
+        WRAPPER_TAGS_GET = document.querySelector(`#${QUERY_CONTAINER_TAGS_GET}`) || document.createElement('div');        
+
     // Variables privadas de la función anonima autoejecutable
-    var _cantidadWorkers,
-        _workers = [],
-        _workerActual = 0,
-        _patterns = new Namespace();
+    var _patterns = new Namespace(),
+        _cantidadWorkers = 3,
+        _iRequester;
 
-    // Sección para agregar funcionalidades necesarias de EC6 (Para IE11)
-    if(!window.Promise) {
-        var script = document.createElement('script'),
-             referencia = document.querySelector('script[src*="main.js"]');
-        
-        // La función fnPolyfills se carga en la función fnInitJMain
-        script.src = 'https://www.promisejs.org/polyfills/promise-6.1.0.js';
-        script.addEventListener('load', function() { window.fnPolyfills(); }, false);
-
-        // Se toma el script main como referencia
-        if(referencia) referencia.parentNode.insertBefore(script, referencia.nextSibling);
-        else document.body.appendChild(referencia);
-    } // end if
+    // Configuración get
+    var _cbStartRequest,
+        _cbEndRequest,
+        _cbErrorRequest;
 
     //---------------------------------
-    // Inicio Métodos para Arrays
+    // Nombre de espacio principal Main for library
+    // Se crea el nombre de espacio j, este será usada para el resto de plugins
     //---------------------------------
-
-    (function () {
-
-        /*
-            //---------------------------------
-            // Método para ordenar un Array de objetos
-            // Ejemplo array.fnSortBy(function () { return this.index })
-            // "Index" propiedad por la que se ordenará
-            //---------------------------------
-        */
-        if (typeof Object.defineProperty === 'function') {
-            try { Object.defineProperty(Array.prototype, 'fnSortBy', { value: sb }); } catch (e) { fnErrorHandler(e); }
-        } // fin if
-        if (!Array.prototype.fnSortBy) Array.prototype.fnSortBy = sb;
-
-        /*
-            //---------------------------------
-            // Función para ordenar
-            //---------------------------------
-            // Parámetros:
-            //---------------------------------
-            // @f:       Función anonima en la que se retorna la propiedad
-            //           por la que se quiere ordenar    {function}
-            //---------------------------------
-            // return:   Retorna el Array ordenado
-            //---------------------------------
-        */
-        function sb(f) {
-            for (var i = this.length; i;) {
-                var o = this[--i];
-                this[i] = [].concat(f.call(o, o, i), o);
-            } // fin for
-            this.sort(function (a, b) {
-                for (var i = 0, len = a.length; i < len; ++i) {
-                    if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
-                } // fin for
-                return 0;
-            }); // fin método sort
-            for (var i = this.length; i;) {
-                this[--i] = this[i][this[i].length - 1];
-            } // fin for
-            return this;
-        } // fin método
-        //---------------------------------
-
-        /*
-            //---------------------------------
-            // Función para encontrar un objeto dentro de un Array
-            // Ejemeplo: array.fnFind(function (e) { return e.name == valorBuscado; });
-            //---------------------------------
-        */
-        if (!Array.prototype.fnFind) {
-            Object.defineProperty(Array.prototype, 'fnFind', {
-                enumerable: false,
-                configurable: true,
-                writable: true,
-                value: function (predicate, all) {
-                    if (this == null) throw new TypeError('Array.prototype.fnFind called on null or undefined');
-                    if (typeof predicate !== 'function') throw new TypeError('predicate must be a function');
-
-                    var list = Object(this);
-                    var length = list.length >>> 0;
-                    var thisArg = arguments[1];
-                    var value;
-                    var listNew = [];
-
-                    for (var i = 0; i < length; i++) {
-                        if (i in list) {
-                            value = list[i];
-                            if (predicate.call(thisArg, value, i, list)) {
-                                // Si se recibe el parametro all como true,
-                                // se devolverán todos los elementos que 
-                                // coincidan con el criterio de búsqueda
-                                if (!all) return value;
-                                else listNew.push(value);
-                            } // fin if
-                        } // fin if
-                    } // fin for
-                    return !all ? undefined : listNew;
-                } // fin function of value
-            }); // fin define property
-        } // fin if function fnFind
-        //---------------------------------
-    })(); // Fin para los métodos para los Arrays
-    //---------------------------------
-
-    //---------------------------------
-    // Fin Métodos para Arrays
-    //---------------------------------
-
-
-
-
-
-    //---------------------------------
-    // Inicio Métodos para elementos HTML
-    //---------------------------------
-
-    (function () {
-
-        //---------------------------------
-        // Encuentra en padre del elemento asignado al query
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @query:  QuerySelector del elemento superior a encontrar
-        //---------------------------------
-        // return:  Si se encuentra un elemento igual al querySelector
-        //          se retorna éste.
-        //---------------------------------
-        Element.prototype.fnClosest = function (query) {
-            if (this.parentNode.nodeType === Node.ELEMENT_NODE)
-                return this === this.parentNode.querySelector(query) ? this : this.parentNode.fnClosest(query);
-        }; // end function closets
-    })(); // End function autoejecutable
-    //---------------------------------
-
-    //---------------------------------
-    // Fin Métodos para elementos HTML
-    //---------------------------------
-
-
-
-
-
+    window.jr = new Namespace(fnInitConfigJMain);
+    
     //---------------------------------
     // inicio Métodos para Espaciones de Nombres
     //---------------------------------
 
-    /*
-        //---------------------------------
-        // Estructura para los nombre de espacios
-        // Ejemplo: var myApp = new Namespace();
-        // Para crear un modulo myApp.fnAddNS('modulA');
-        // myApp.modulA = {object}
-        //---------------------------------
-        // Parametros:
-        //---------------------------------
-        // @ns: Espacio de nombres
-        //---------------------------------
-        // Retorna: Objeto con la propiedad fnAddNS
-        //---------------------------------
-    */
-    function Namespace(ns) {
+	/*
+		//---------------------------------
+		// Estructura para los nombre de espacios
+		// Ejemplo: var myApp = new Namespace();
+		//---------------------------------
+		// Namespace.addNS
+		//---------------------------------
+		// Función para crear el nuevo espacio de nombre
+		// Para crear un modulo myApp.addNS('modulA');
+		// myApp.modulA = {object}
+		//---------------------------------
+		// Parametros:
+		//---------------------------------
+		// @ns: Espacio de nombres
+		// @body?: Objeto o función que tomará el lugar de la instacia
+		//---------------------------------
+		// Retorna: Objeto o función con la propiedad fnAddNS
+		//---------------------------------
+	*/
+    function Namespace(mainBody) {
+        function Instancia(ns) {
+            var ctx = this === window ? {} : this;
+
+            // Se genera un espacio de nombre por cada punto dentro de la variable ns
+            if (ns && ns.indexOf('.')) {
+                ns.split('.').forEach(function (name) {
+                    ctx = ctx.addNS(name);
+                }); // end forEach
+            } // end if
+        } // fin método
+
         // Función para crear un nuevo nombre de espacio
-        this.fnAddNS = function (name) {
+        Instancia.prototype.addNS = function (name, body) {
             if (!name) return;
             if (!name.match(window.validateNS)) return;
             // Crea una propiedad si esta no existe
-            if (typeof this[name] == 'undefined') this[name] = new Namespace();
+            if (typeof this[name] == 'undefined') {
+                if (body && !body.hasOwnProperty('addNS')) {
+                    body.addNS = Instancia.prototype.addNS;
+                    this[name] = body;
+                }
+                else {
+                    this[name] = new Instancia();
+                }
+            }
             return this[name];
         }; // fin método AddNS
 
-        // Se genera un espacio de nombre por cada punto dentro de la variable ns
-        if(ns && ns.indexOf('.')) {
-            var ctx = this;
-            ns.split('.').forEach(function(name) {
-                ctx = ctx.fnAddNS(name);
-            }); // end forEach
-        } // end if
+        if (mainBody) {
+            if (!mainBody.hasOwnProperty('addNS')) mainBody.addNS = Instancia.prototype.addNS;
+            return mainBody;
+        }
+
+        return new Instancia();
     } // fin método
     //---------------------------------
 
-    /*
-        //---------------------------------
-        // Función para encontrar la ruta de un nombre de espacios
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @ns:     Nombre de espacio el cual sera retornado   'miNombreEspacion.Tools' 
-        //---------------------------------
-        // return:  Retorna el nombre de espacion que conicida con el nombre indicado   {}
-        //---------------------------------
-    */
-    function fnImport(ns) {
-        var parent;
-        try {
-            var parts = ns.split('.');
-            for (var i = 0; i < parts.length; i++) {
-                if (!parent && i == 0) parent = window;
-                parent = parent[parts[i]];
-            } // fin for
-            return parent;
-        } // fin try
-        catch (e) {
-            fnErrorHandler(e);
-            return null;
-        } // fin catch
+	/*
+		//---------------------------------
+		// Función para encontrar la ruta de un nombre de espacios
+		//---------------------------------
+		// Parámetros:
+		//---------------------------------
+		// @ns:     Nombre de espacio el cual sera retornado   'miNombreEspacion.Tools' 
+		//---------------------------------
+		// return:  Retorna el nombre de espacion que conicida con el nombre indicado   {}
+		//---------------------------------
+	*/
+    function fnImport(ns, assingNull) {
+        var currentNS = window,
+            parts = ns.split('.'),
+            size = parts.length,
+            penultimoEspacio = size - 1,
+            parentNS;
+
+        for (var i = 0; i < size; i++) {
+            parentNS = currentNS;
+            currentNS = currentNS[parts[i]];
+        } // fin for
+
+        if(assingNull) {
+            parentNS[parts[penultimoEspacio]] = null;
+            delete parentNS[parts[penultimoEspacio]];
+        } 
+
+        return currentNS;
     } // fin método
     //---------------------------------
 
-    /*
-        //---------------------------------
-        // Valida que el objeto herede de la función Namespace
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @dependencies:   Arreglo con los nombres de espacio a validar    
-        //                  [{namespace}, {namespace}] || {namespace}
-        // return:          Retorna un bool (0 || 1)
-        //---------------------------------
-    */
-    function fnDepenciesTrue(dependencies) {
-        if (!dependencies) return false;
-        if (dependencies.constructor === Namespace) if (!dependencies) return false;
-        if (dependencies.constructor === Array) for (var i in dependencies) if (!dependencies[i]) return false;
-        return true;
-    } // end method
-    //---------------------------------
-
-    //---------------------------------
+	//---------------------------------
     // Fin Métodos para Espaciones de Nombres
     //---------------------------------
 
@@ -245,424 +157,588 @@
 
 
     //---------------------------------
-    // Inicio Métodos para peticiones Sincronos
+    // Inicio Métodos para peticiones Asincronas
     //---------------------------------
+
+    if (!Promise.prototype.spread) {
+        Promise.prototype.spread = function (fn) {
+            return this.then(function (result) {
+                return result instanceof Array ? fn(...result) : fn(result);
+            });
+        };
+    }
+
 
     /*
         //---------------------------------
-        // fnGet()
-        // Esta función usa hilos (webworkers), se cargan archivos mediante ajax, para el navegador Google Chrome.  
-        // Estos archivo se guardan en el navegador haciendo usao de la interfaz FileSystem.
-        // Con esto se logra menos peticiones al servidor y una carga más rápida de la página.
-        //
-        // Se debe cargar la primera vez un archivo .json con los nombre de los archivos que deban actualizar, los
-        // objetos del .json deberán tener las siguientes propiedades: nombre y la fecha de actualización.
-        // La estructura del json debe ser la siguiente:
-        //  [
-        //      { "name":"ui.js", "date":"2014-06-24-15" }
-        //  ]
+        // Método para tomar todas las queryString de la URL.
         //---------------------------------
-        // Parametros:
-        //---------------------------------
-        // @data:   Objeto con la información para cargar los archivos          [{},{}]
-        // @then:   Método que se ejecuta cuando carguen todos los archivos     (function (response, args) {})
-        //---------------------------------
-        // Retorna: Estructura de una objeto Promesa
+        // Retorna: {key:value}
         //---------------------------------
     */
-    function fnGet(data) {
-        var requests, _fnCallback, promesas, estructuraPromise;
+    function getQuerys(path) {
+        var ruta = path || location.search,
+            indiceQuery = ruta.indexOf('?'),
+            querys, qs, key, value, size;
 
-        // Se trabajar con un objeto iterable si esté no lo es
-        requests = !data.length ? [data] : data;
+        if (ruta.indexOf('?') == -1) return {};
+
+        querys = ruta.substr(indiceQuery + 1).split('&');
+        size = querys.length;
+        qs = {};
+        for (var i = 0; i < size; ++i) {
+            key = querys[i].substring(0, querys[i].indexOf('='));
+            value = querys[i].substring(querys[i].indexOf('=') + 1, querys[i].length);
+
+            qs[key] = decodeURIComponent(value.replace(/\+/g, " "));
+        } // end for
+        return qs;
+    }
+
+    //---------------------------------
+    // Espacio para fileSystem
+    //---------------------------------
+    (function () {
+        var _workers = new Map(),
+            _indexWorkerActual = 0;
 
         /*
-            // Se referencia el resultado de Promises.all() [resultadoPromesa1, ..., n], esto retorna un arreglo
-            // con los parámetros de cada una de las promesas y su respuesta, con esto se altera cuando solo 
-            // se tiene un request.
-        */
-        promesas = Promise.all(requests.map(window.useServiceWorker ? fnSendRequestSW : fnSendRequest)).then(function() {
-            var pars;
-            if(!fnIsFunction(_fnCallback)) return;
+			//---------------------------------
+			// Obtiene un worker, esto se configura con un objeto observador.
+			//---------------------------------
+			// Retorna: {Worker} Retorna un WebWorker para realizar peticiones.
+			//---------------------------------
+		*/
+        function fnGetWorker() {
+            var worker;
 
-            /*
-                // Cuando se realiza solo una petición se agregan las propiedades
-                // que no hacen parte de una petición,
-                // Esto porque las promesa al usar Promise.all, el resultado de cada
-                // promesa se retorna como un Array
-            */
-            if(requests.length == 1 && arguments[0].length) { 
-                arguments[0].push(fnGetDiferences(window.REQUESTOBJECT, requests[0]));
-                return _fnCallback.apply(this, arguments[0]);
+            // Se genera un Worker y se obtiene un observador
+            if (_workers.size < _cantidadWorkers) {
+                worker = new Worker(jr.fileSystemWorkerPath);
+                worker.observador = _patterns.observer.instance;
+                worker.addEventListener("message", fnListenerWoker, false);
+                worker.addEventListener("error", fnListenerWoker, false);
+                _workers.set(_workers.size, worker);
             } // end if
 
-            return _fnCallback.apply(arguments);
-        });
+            // Se obtiene el worker y se aumenta contador
+            if (_indexWorkerActual >= _workers.size) _indexWorkerActual = 0;
+            worker = _workers.get(_indexWorkerActual);
+            _indexWorkerActual++;
+
+            return worker;
+
+            // listener event observer of worker, se notifica al observado y se elimina éste
+            function fnListenerWoker(e) {
+                worker.observador
+                    .notify(e.data.observedId, e)
+                    .remove(e.data.observedId);
+            } // end function
+        }
+        //---------------------------------
+
+		/*
+			//---------------------------------
+			// Se obtiene la referencia de un worker, y se envian los 
+			// datos al servidor
+			//---------------------------------
+			// Parámetros:
+			//---------------------------------
+			// @data:   {object|string} Objeto con la información para cargar los archivos.
+			//---------------------------------
+			// Retorna: {Promise} Retorna un objeto Promise
+			//---------------------------------
+		*/
+        function fnSendRequest(request, fragment, promiseTags) {
+            // Variables para cuando retorne información el worker
+            var _copyRequest = fnGetRequest(request, true);
+
+            // Se crea una nueva promesa
+            return new Promise(function (resolve, reject) {
+                var command, worker;
+
+                // Se usa el patrón Command
+                command = _patterns.command.instance
+                    .on('message', fnReseiver)
+                    .on('error', reject);
+
+                // Instancia del worker
+                worker = fnGetWorker();
+
+                // Se usa el patrón Observador
+                _copyRequest.observedId = worker.observador.add(function (e) {
+                    command.trigger(e.type, e.data, request, resolve);
+                });
+
+                // Config Get
+                fnExecFunction(_cbStartRequest, _copyRequest);
+
+                // Se envia los datos al worker
+                worker.postMessage(Object.assign({ files: jr.filesToUpdate }, _copyRequest));
+            }).then(function (result) {
+                fnExecFunction(request.then, result);
+                return result;
+            }, function (error) {
+                _copyRequest.error = error;
+                fnExecFunction(request.catch, _copyRequest);
+                return Promise.reject(_copyRequest);
+            });
+        }
+        //---------------------------------
 
         /*
-            // Se emula la función then del objeto Promise, esto para modificar el 
-            // comportamiento del mismo.
+            //---------------------------------
+            // fnDeleteWorkers()
+            // Función para eliminar un arreglo de _workers
+            //---------------------------------
+            // Parámetros:
+            //---------------------------------
+            // @workers: [{Worker}] Webworkers a eliminar
+            //---------------------------------
         */
-        estructuraPromise = {};
-        estructuraPromise.then = function(fnCallback) {
-            _fnCallback = fnCallback;
-            return promesas;
-        } // end then
+        function fnDeleteWorkers(workers) {
+            if (!_workers) return;
+            if (!_workers.length) return;
+            do {
+                _workers[0].terminate();
+                _workers.splice(0, 1);
+            } while (_workers.length) // end do while 
+        } // end function
+        //---------------------------------
 
-        // Patrón Modular
-        return estructuraPromise;
-    } // end function
+        /*
+			//---------------------------------
+			// Función que configura la lógica para guardar peticiones con fileSystem
+			//---------------------------------
+		*/
+        function fnInit() {
+            return Promise.resolve();
+        }
+        //---------------------------------
+
+        // Public API
+        this.sendRequest = fnSendRequest;
+        this.init = fnInit;
+    }).call(jr.addNS('fileSystem'));
+
     //---------------------------------
+    // Espacio para service worker
+    //---------------------------------
+    (function () {
+        var _registratioSW;
 
-    /*
+        /*
+			//---------------------------------
+			// Se obtiene la referencia del service worker
+			//---------------------------------
+			// Retorna: {Promise} Retorna un objeto Promise con el parámetro {SW} service worker
+			//---------------------------------
+		*/
+        function getRegistrationSW() {
+            if (!_registratioSW) return navigator.serviceWorker.getRegistration().then(sw => _registratioSW = sw);
+            return Promise.resolve(_registratioSW);
+        } // end function
         //---------------------------------
-        // Se obtiene la referencia de un worker, y se envian los 
-        // datos al servidor
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @data:   {object} Objeto con la información para cargar los archivos.
-        //---------------------------------
-        // Retorna: {Promise} Retorna un objeto Promise
-        //---------------------------------
-    */
-    function fnSendRequest(request) {
-        // Variables para cuando retorne información el worker
-        var _fnCallback, _resolve;
-        
-        // Se crea una referencia hacia la funnción de callback.
-        _fnCallback = request.then;
-        // Se elimina la función de callback para que no tenga problemas con el envió al worker.
-        delete request.then;
 
-        // Se crea una nueva promesa
-        return new Promise(function(resolve, reject) {
-            var command, worker;
+		/*
+			//---------------------------------
+			// Se obtiene la referencia de un worker, y se envian los 
+			// datos al servidor
+			//---------------------------------
+			// Parámetros:
+			//---------------------------------
+			// @data:   {object} Objeto con la información para cargar los archivos.
+			//---------------------------------
+			// Retorna: {Promise} Retorna un objeto Promise
+			//---------------------------------
+		*/
+        function fnSendRequestSW(request, fragment, promiseTags) {
+            // Variables para cuando retorne información el worker
+            var _copyRequest = fnGetRequest(request, true);
 
-            // Se usa el patrón Command
-            command = _patterns.command.instance;
-            command.on('message', fnReseiver);
-            command.on('error', reject);
+            // Se crea una nueva promesa
+            return new Promise(function(resolve, reject) {
+                getRegistrationSW().then(function (sw) {
+                    var messageChannel = new MessageChannel();
 
-            // Instancia del worker
-            worker = fnGetWorker();
+                    messageChannel.port1.onmessage = function (event) {
+                        if (typeof event.data == 'string') {
+                            reject(event.data);
+                            return;
+                        }
+                        else fnReseiver(event.data, _copyRequest, resolve);
+                    } // end function
 
-            // Se usa el patrón Observador
-            worker.observador.add(request.src, function(e) { 
-                command.trigger(e.type, e.data, request, resolve);
+                    // Config Get
+                    fnExecFunction(_cbStartRequest, _copyRequest);
+
+                    // This sends the message data as well as transferring messageChannel.port2 to the service worker.
+                    // The service worker can then use the transferred port to reply via postMessage(), which
+                    // will in turn trigger the onmessage handler on messageChannel.port1.
+                    // See https://html.spec.whatwg.org/multipage/workers.html#dom-worker-postmessage
+                    sw.active.postMessage(
+                        Object.assign({ files: jr.filesToUpdate }, _copyRequest),
+                        [messageChannel.port2]
+                    );
+                });
+            }).then(function(result) {
+                // TODO: Validar si es necesario el try catch
+                try {
+                    fnExecFunction(request.then, result);   
+                } catch (error) {
+                    _copyRequest.error = error;
+                    throw _copyRequest;
+                }
+                return result;
+            }, function (error) {
+                _copyRequest.error = error;
+                fnExecFunction(request.catch, _copyRequest);
+                return Promise.reject(_copyRequest);
             });
+        } // end function
+        //---------------------------------
 
-            // Se envia los datos al worker
-            worker.postMessage(fnExtend({ files: window.filesToUpdate }, request));
-        }).then(function(args) {
-            // Se ejecuta la función de callback por cada petición
-            if(!fnIsFunction(_fnCallback)) return args;
-            _fnCallback(args, fnGetDiferences(window.REQUESTOBJECT, request));
-        }).catch(function() { console.log(arguments); });
-    } // end function
-    //---------------------------------
+        /*
+			//---------------------------------
+			// Registra un service worker si el navegador lo soporta.
+			//---------------------------------
+			// Parámetros:
+			//---------------------------------
+			// @fnCallback: Función de callack cuando se registre el serviceworker.
+			//---------------------------------
+		*/
+        function fnInitServiceWorker() {
+			/* 
+				.then(function (registration) {
+				// TODO: implementar notificaciones push
+					return navigator.serviceWorker.ready.then(function (serviceWorkerRegistration) {                
+						return serviceWorkerRegistration.pushManager.getSubscription();
+					});
+				})
+			*/
+            return Promise.all([navigator.serviceWorker.register(jr.serviceWorkerPath), navigator.serviceWorker.ready])
+                .then(function (registrations) {
+                    if (jr.dev) console.log('Service Worker activado con el contexto:', registrations[0].scope);
+                    return navigator.onLine ? registrations[0].update() : Promise.resolve();
+                }).then(function () {
+                    navigator.serviceWorker.addEventListener('message', function (event) {
+                        console.log('Mensaje recibido del SW: ', JSON.stringify(event.data));
+                        // event.ports[0].postMessage("Client 1 Says 'Hello back!'");
+                    });
+                });
+        } // end function
+        //---------------------------------
+
+        // Public API
+        this.sendRequest = fnSendRequestSW;
+        this.init = fnInitServiceWorker;
+    }).call(jr.addNS('serviceWorker'));
+
 
     /*
-        //---------------------------------
-        // Se obtiene la referencia de un worker, y se envian los 
-        // datos al servidor
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @data:   {object} Objeto con la información para cargar los archivos.
-        //---------------------------------
-        // Retorna: {Promise} Retorna un objeto Promise
-        //---------------------------------
-    */
-    function fnSendRequestSW(request) {
-        // Variables para cuando retorne información el worker
-        var _fnCallback, _resolve;
-        
-        // Se crea una referencia hacia la funnción de callback.
-        _fnCallback = request.then;
-        // Se elimina la función de callback para que no tenga problemas con el envió al worker.
-        delete request.then;
+		//---------------------------------
+		// fnGet()
+		// Esta función usa hilos (webworkers), se cargan archivos mediante ajax, para el navegador Google Chrome.  
+		// Estos archivo se guardan en el navegador haciendo usao de la interfaz FileSystem.
+		// Con esto se logra menos peticiones al servidor y una carga más rápida de la página.
+		//
+		// Se debe cargar la primera vez un archivo .json con los nombre de los archivos que deban actualizarsen, los
+		// objetos del .json deberán tener las siguientes propiedades: nombre y la fecha de actualización.
+		// La estructura del json debe ser la siguiente:
+		//  [
+		//      { "name":"ui.js", "date":"2014-06-24-15" }
+		//  ]
+		//---------------------------------
+		// Parametros:
+		//---------------------------------
+		// @data:   Objeto con la información para cargar los archivos          [{},{}]
+		// @then:   Método que se ejecuta cuando carguen todos los archivos     (function (response, args) {})
+		//---------------------------------
+		// Retorna: Estructura de una objeto Promesa
+		//---------------------------------
+	*/
+    function fnGet() {
+        var totalRequest = arguments.length,
+            pars = arguments;
 
-        // Se recarga la página para activar el wervice worker
-        if (!navigator.serviceWorker.controller) window.location.reload();
-
-        // Se crea una nueva promesa
         return new Promise(function(resolve, reject) {
-            var messageChannel = new MessageChannel();
-            
-            messageChannel.port1.onmessage = function(event) {
-                fnReseiver(event.data, request, resolve);
-                // event.data.error ? reject(event.data.error) : 
-            } // end function
+            getRequests(...pars).then(function() {
+                resolve(...arguments);
+            }, error => {
+                var result = { error: error };
+                if (fnIsFunction(_cbErrorRequest)) fnExecFunction(_cbErrorRequest, result);
+                else return reject(result);
+            });
+        });
 
-            // This sends the message data as well as transferring messageChannel.port2 to the service worker.
-            // The service worker can then use the transferred port to reply via postMessage(), which
-            // will in turn trigger the onmessage handler on messageChannel.port1.
-            // See https://html.spec.whatwg.org/multipage/workers.html#dom-worker-postmessage
-            navigator.serviceWorker.controller.postMessage(
-                fnExtend({ files: window.filesToUpdate }, request), 
-                [messageChannel.port2]
-            );
-
-        }).then(function(args) {
-            // Se ejecuta la función de callback por cada petición
-            if(!fnIsFunction(_fnCallback)) return args;
-            _fnCallback(args, fnGetDiferences(window.REQUESTOBJECT, request));
-        }).catch(function() { console.log(arguments); });
+        // Se valida un parámetro, un arreglo un Promise.all
+        function getRequests() {
+            var size = arguments.length;
+            for (var i = 0; i < size; i++) {
+                if(arguments[i] instanceof Array)
+                    arguments[i] = Promise.all(arguments[i].map(request => {
+                        if(request instanceof Array) return getRequests(...request);
+                        else return getRequests(request);
+                    }));
+                else
+                    arguments[i] = getPromise(arguments[i]);
+            }
+            return size == 1 ? arguments[0] : Promise.all(arguments);
+        }
+        // Se valida para que se use una estructura de varios parámetros
+        function getPromise(request) {
+            return request instanceof Promise ? request : _iRequester.sendRequest(request);
+        }
     } // end function
     //---------------------------------
 
-    /*
-        //---------------------------------
-        // Se encarga de recibir la información del observador, que a su vez
-        // recibe la información del worker, resuelve la promesa, y ejecuta
-        // la función de callback, si es unapetición para archivos js o css
-        // se crean sus respectivas tag en el documento.
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @reponse:    {object}    Información que se retorno desde el worker.
-        // @request:    {object}    Request que se realiza al servidor.
-        // @resolve:    {function}  Función que resulve una promesa.
-        //---------------------------------
-    */
+	/*
+		//---------------------------------
+		// Se encarga de recibir la información del observador, que a su vez
+		// recibe la información del worker, resuelve la promesa, y ejecuta
+		// la función de callback, si es unapetición para archivos js o css
+		// se crean sus respectivas tag en el documento.
+		//---------------------------------
+		// Parámetros:
+		//---------------------------------
+		// @reponse:          {object}    Información que se retorno desde el worker.
+		// @request:          {object}    Request que se realiza al servidor.
+		// @resolvePromise:   {function}  Función que resulve una promesa.
+		//---------------------------------
+	*/
     function fnReseiver(response, request, resolve) {
-        var resumen, type;
-        resumen = { data: response.result, name: response.path };
-        resumen.data = resumen.data || URL.createObjectURL(response.blob);
+        var notRequestBlob = response.result instanceof Blob && request.mime !== 'blob',
+            result = { 
+                request: request, 
+                response: notRequestBlob ? URL.createObjectURL(response.result) : response.result
+            },
+            type = /^.*\.(css|js)([?#]{1}.*)?$/gi.exec(request.src);
 
-        type = /.*\.(css|js)$/gi.exec(resumen.name);
         // Cuando el archivo es un script o un estilo se crea la tag respectiva y se agrega al documento
-        if (!response.result && type && (request.mime == type[1] || !request.mime)) {
+        if (type) {
             // Si es una archivo de tipo javascript o una hoja de estilos se crea una tag,
             // si se tiene una función para hacer callback se ejecuta esta.
-            fnCreateScriptTemp({
-                href: resumen.data, type: type[1],
-                name: resumen.name, fnCallTag: resolve,
-                repeatTag: request.repeatTag
-            }); // end fnCreateScriptTemp
-        } else resolve(resumen);
+            fnTagScriptLink({
+                href: result.response, type: type[1],
+                name: request.src, repeatTag: request.repeatTag,
+                referenceTag: request.referenceTag
+            }).then(function () {
+                // Config Get
+                fnExecFunction(_cbEndRequest, result);
+                resolve();
+            });
+        } else {
+            // Config Get
+            fnExecFunction(_cbEndRequest, result);
+            resolve(result);
+        }
     } // end function
     //---------------------------------
 
-    /*
-        //---------------------------------
-        // Obtiene las propiedeades diferente entre una referencia (objeto) y un objeto.
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @source: {object} Objeto con la estructura a no tomar.
-        // @target: {object} Objeto con la información para obtener las.
-        //---------------------------------
-        // Retorna: {object} Retorna un objeto con las diferencias.
-        //---------------------------------
-    */
+	/*
+		//---------------------------------
+		// Obtiene las propiedeades diferente entre una referencia (objeto) y un objeto.
+		//---------------------------------
+		// Parámetros:
+		//---------------------------------
+		// @source: {object} Objeto con la estructura a no tomar.
+		// @target: {object} Objeto con la información para obtener las.
+		//---------------------------------
+		// Retorna: {object} Retorna un objeto con las diferencias.
+		//---------------------------------
+	*/
     function fnGetDiferences(source, target) {
         var diference = {};
-        for(var i in target) { 
-            if(!(i in source)) diference[i] = target[i];
-        } // end for
+        Object.keys(target).forEach(name => {
+            if(!source.hasOwnProperty(name)) diference[name] = target[name];
+        });
         return diference;
     } // end function
     //---------------------------------
 
-    /*
-        //---------------------------------
-        // Obtiene un worker, esto se configura con un objeto observador.
-        //---------------------------------
-        // Retorna: {Worker} Retorna un WebWorker para realizar peticiones.
-        //---------------------------------
-    */
-    function fnGetWorker() {
-        var worker;
-
-        // Por dejecto son 3 los worker que se mantiene en la aplicación.
-        _cantidadWorkers = _cantidadWorkers || 3;
-
-        // Se genera un Worker y se obtiene un observador
-        if(_cantidadWorkers > _workers.length) {
-            worker = new Worker(window.urlWorkerImport || 'assets/js/workers/worker-import.js');
-            worker.observador = _patterns.observer.instance;
-            worker.addEventListener("message", fnListenerWoker, false);
-            worker.addEventListener("error", fnListenerWoker, false);
-            _workers.push(worker);
-        } // end if
-
-        // Se obtiene el worker y se aumenta contador
-        if(_workerActual >= _workers.length) _workerActual = 0;
-        worker = _workers[_workerActual];
-        _workerActual++;
-
-        return worker;
-
-        function fnListenerWoker(e) {
-            // Se notifica al observado y se elimina éste
-            var observado = worker.observador.notify(e.data.path, e);
-            worker.observador.remove(observado);
-        } // end function
+	/*
+		//---------------------------------
+		// fnGetRequest()
+		// Función para evaluar si un objeto es un string con la ruta a solicitar
+		//---------------------------------
+		// Parámetros:
+		//---------------------------------
+		// @request:   Ínformación de un request.
+		//---------------------------------
+	*/
+    function fnGetRequest(request, removeFunctions) {
+        if (typeof request === 'string' || request instanceof String) return { src: request.toString() };
+        if (removeFunctions) return JSON.parse(JSON.stringify(request));
+        return request;
     } // end function
     //---------------------------------
 
     /*
+		//---------------------------------
+		// Crea una tag script o una tag link(css) para asignar una url y ejecutar un callback
+		//---------------------------------
+		// Parámetros:
+		//---------------------------------
+		// @d:              Objeto con los parametro necesarios para la ejecución de la función
+		// @d.href:         Dirección del blob  'string'
+		// @d.type:         Tipo de tag a crear ('js' || 'css')
+		// @d.name:         Nombre del archivo para identificarlo en la tag
+		// @d.repeatTag:    Valor para saber si se salta la validación: si existe el 
+		//                  objeto en el DOM. (true || false)
+        // @d.referenceTag: Agrega un data-name para identificar la tag a crear
         //---------------------------------
-        // Registra un service worker si el navegador lo soporta.
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @fnCallback: Función de callack cuando se registre el serviceworker.
-        //---------------------------------
-    */
-    function fnInitServiceWorker() {
-        return Promise.resolve().then(function() {
-            return navigator.serviceWorker.register('./service-worker.js').then(function(registration) { 
-                console.log('Service Worker registrado con el contexto: ' + registration.scope);
-            });
-        }).then(function() {
-            return navigator.serviceWorker.ready.then(function(serviceWorkerRegistration) {
-                return serviceWorkerRegistration.pushManager.getSubscription();
-            });
-        }).catch(function(err) { 
-            console.log(err);
-            delete window.useServiceWorker;
+		// Retorna: Promise
+		//---------------------------------
+	*/
+    function fnTagScriptLink(d = {}) {
+        return new Promise(function (resolve, reject) {
+            var tag, attributesUrl, name, indiceFin;
+
+			/*
+				// Se valida si ya hay una tag con el data-name igual
+				// para no volverlo a crear
+			*/
+            if (!d.repeatTag && d.referenceTag) {
+                var query = (d.type == 'js' ? 'script' : 'link') + '[data-name="' + d.name + '"]';
+                document.querySelector(query) && resolve({});
+            } // end if repeatTag
+
+            // Se elije que tipo de tag se va a crear
+            switch (d.type) {
+                case 'js':
+                    tag = document.createElement("script");
+                    tag.src = d.href;
+                    tag.async = true;
+                    break;
+                case 'css':
+                    tag = document.createElement("link");
+                    tag.href = d.href;
+                    tag.rel = 'stylesheet';
+                    tag.type = 'text/css';
+                    break;
+            } // fin switch
+
+            if (d.referenceTag) {
+                name = d.name;
+                indiceFin = name.indexOf('?');
+                if(indiceFin > -1) name = name.substring(0, indiceFin);
+                tag.dataset.name = name;
+            }
+
+            // Se verifica querys si se requiere y se asignan al control
+            if(d.name) {
+                attributesUrl = getQuerys(d.name);
+                Object.keys(attributesUrl).forEach(name => tag.setAttribute(name, attributesUrl[name]));
+            }
+
+            // Cuando la tag se carga se ejecuta la funcion del item
+            tag.addEventListener('load', resolve, false);
+            tag.addEventListener('error', reject, false);
+
+            // Se agrega la nueva tag en el DOM            
+            WRAPPER_TAGS_GET.appendChild(tag);
         });
-    } // end function
-    //---------------------------------
-    
-
-    /*
-        //---------------------------------
-        // Crea una tag script o una tag css para asignar el la url de un blob
-        //---------------------------------
-        // parámetros:
-        //---------------------------------
-        // @d:             Objeto con los parametro necesarios para la ejecución de la función
-        // @d.href:        Dirección del blob  'string'
-        // @d.type:        Tipo de tag a crear ('js' || 'css')
-        // @d.name:        Nombre del archivo para identificarlo en la tag
-        // @d.fnCallTag:   Método callback que será ejecutado cuando se cargue la información
-        //                 en el documento
-        // @d.repeatTag:   Valor para saber si se salta la validación de si existe el 
-        //                 objeto en el DOM. (true || false)
-        //---------------------------------
-    */
-    function fnCreateScriptTemp(d) {
-        /*
-            // Se valida si ya hay una tag con el data-name igual
-            // para no volverlo a crear
-        */
-        if (!d.repeatTag) {
-            var query = (d.type == 'js' ? 'script' : 'link') + '[data-name="' + d.name + '"]';
-            if (document.querySelectorAll(query).length) {
-                if (fnIsFunction(d.fnCallTag)) {
-                    // Se envia parámetros para que se simula la carga de un evento
-                    d.fnCallTag(true);
-                } // end if
-                return;
-            } // end if
-        } // end if repeatTag
-
-        // Se elije que tipo de tag se va a crear
-        var tag;
-        switch (d.type) {
-            case 'js':
-                tag = document.createElement("script");
-                tag.setAttribute("src", d.href);
-                break;
-            case 'css':
-                tag = document.createElement("link");
-                tag.setAttribute("href", d.href);
-                tag.setAttribute("rel", 'stylesheet');
-                tag.setAttribute("type", 'text/css');
-                break;
-        } // fin switch
-        tag.dataset.name = d.name;
-        // Cuando la tag se carga se ejecuta la funcion del item
-        tag.addEventListener('load', d.fnCallTag, false);
-
-        // Se agrega la nueva tag en el DOM        
-        document.querySelector('body').appendChild(tag);
     } // fin método
     //---------------------------------
 
-    /*
-        //---------------------------------
-        // fnDeleteWorkers()
-        // Función para eliminar un arreglo de _workers
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @workers: [{Worker}] Webworkers a eliminar
-        //---------------------------------
-    */
-    function fnDeleteWorkers(workers) {
-        if (!_workers) return;
-        if (!_workers.length) return;
-        do {
-            _workers[0].terminate();
-            _workers.splice(0, 1);
-        } while (_workers.length) // end do while 
-    } // end function
-    //---------------------------------
-
-    /*
+	/*
         //---------------------------------
         // fnInitJMain()
-        // Función para mejorar la funcionalidad de las
-        // peticiones asincronas, además envia la petición
-        // del archivo filesToUpdate
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @opciones:   Valores de configuración.
-        // @.srcFiles:      Path del archivo filesToUpdate.json
-        // @.workersCount:  Cantidad de workers que realizaran las peticiones.
-        // @.useSW:         Bandera para identificar si se debe usa un service worker.
+        // Función para inicializar el service worker o el filesystem
         //---------------------------------
     */
-    function fnInitJMain(opciones) {
-        var estructuraPromise = {}, _fnCallback;
+    function fnInitJMain() {
+        var currentTag = document.currentScript,
+            configuracion = {  
+                useFS: false,
+                useSW: true,
+                workersCount: 3,
+            };
 
-        if(opciones) {
-            _cantidadWorkers = opciones.workersCount;
-            opciones.srcFiles = opciones.srcFiles || 'assets/config/filesToUpdate.json';
-            window.useServiceWorker = opciones.useSW && !!navigator.serviceWorker && window.ssl;
-        } // end if
+        // Configuración defecto
+        Object.assign(configuracion, document.currentScript.dataset);        
+        jr.useServiceWorker = configuracion.useSW;
 
-        // Se verifica la cache y se actualiza esta
-        window.addEventListener('load', function (e) {
-            window.applicationCache.addEventListener('updateready', function () {
-                if (window.applicationCache.status == window.applicationCache.UPDATEREADY) {
-                    window.applicationCache.swapCache();
-                    window.location.reload();
-                } // end if
-            }, false); // end functoin updaterady
-        }, false); // end function load
+        // Configuración paths
+        jr.fileSystemWorkerPath = configuracion.fileSystemWorkerPath || FILESYSTEM_WORKER_PATH;
+        jr.serviceWorkerPath = configuracion.serviceWorkerPath || SERVICE_WORKER_PATH;
 
-        // Cuando se soporta Promise nativo
-        if(window.Promise && !window.useServiceWorker) return fnGetFilesToUpdate();
-        
-        /*
-            // Para navegadores antiguos se crea una estructura de Promise para emular esta, mientras
-            // se carga el polyfill, se guarda una función fnPolyfills, que ejecutara el callback
-            // de .then
-        */
-        estructuraPromise.then = function(fnCallback) {
-            _fnCallback = fnCallback;
-            if(!window.Promise) window.fnPolyfills = fnGetFilesToUpdate;
-            if(window.useServiceWorker) fnInitServiceWorker().then(fnGetFilesToUpdate);
-        } // end function then
+        // Asignación de interface para realizar las peticiones y guardar las respuestas
+        if (jr.useServiceWorker) _iRequester = jr.serviceWorker;
+        if (jr.useFileSystem) {
+            _iRequester = jr.fileSystem;
 
-        // Función de recursividad
-        function fnGetFilesToUpdate() {
-            var respuesta = fnGet({ src: opciones.srcFiles, cache: false }).then(function (response) { 
-                window.filesToUpdate = response.data;
-            });
+            window.addEventListener('load', function (e) {
+                window.applicationCache.addEventListener('updateready', function () {
+                    if (window.applicationCache.status == window.applicationCache.UPDATEREADY) {
+                        window.applicationCache.swapCache();
+                        window.location.reload();
+                    } // end if
+                }, false); // end function updaterady
+            }, false); // end function load
+        }
 
-            return fnIsFunction(_fnCallback) ? respuesta.then(_fnCallback) : respuesta;
-        } // end function
+        _iRequester.init().then(function() {
+            // Para agrupar las tags generadas con el get
+            if(!WRAPPER_TAGS_GET.id) WRAPPER_TAGS_GET.id = QUERY_CONTAINER_TAGS_GET;
+            fnTagScriptLink({ href: currentTag.dataset.init, type: 'js' });
+            !document.body.hasChildNodes(WRAPPER_TAGS_GET) && document.body.appendChild(WRAPPER_TAGS_GET);
+        });
+    }
 
-        // Patrón Modular
-        return estructuraPromise;
+	/*
+		//---------------------------------
+		// fnInitJMain()
+		// Función para mejorar la funcionalidad de las
+		// peticiones asincronas, además envia la petición
+		// del archivo filesToUpdate
+		//---------------------------------
+		// Parámetros:
+		//---------------------------------
+		// @opciones:   Valores de configuración.
+		//---------------------------------
+		// @.srcFiles:      Path del archivo filesToUpdate.json
+		// @.workersCount:  Cantidad de workers que realizaran las peticiones.
+		// @.useSW:         Bandera para identificar si se debe usa un service worker.
+		//---------------------------------
+		// Configuración get()
+		//---------------------------------
+		// @.cbStartRequest:    Callback para ejecutar antes de hacer las peticiones al servidor 
+		// @.cbEndRequest:      Callback para ejecutar cuando el servidor responda las peticiones
+		//---------------------------------
+	*/
+    function fnInitConfigJMain(opciones) {
+        var configuracion = {
+            filesUpdatePath: FILES_UPDATE_PATH,
+            getToWindow: true,
+        };
+
+        // Configuración defecto
+        Object.assign(configuracion, opciones);        
+        jr.useFileSystem = configuracion.useFS;
+
+        // Configuración paths
+        jr.filesUpdatePath = configuracion.filesUpdatePath || FILES_UPDATE_PATH;
+
+        // Configuración de funcón globales
+        _cbStartRequest = configuracion.cbStartRequest;
+        _cbEndRequest = configuracion.cbEndRequest;
+        _cbErrorRequest = configuracion.cbErrorRequest;
+
+        // Variablesa windows
+        if (configuracion.getToWindow) window.get = fnGet;
+        return fnGet({ src: jr.filesUpdatePath, cache: false }).then(function (result) {
+            jr.filesToUpdate = result.response;
+
+            if(configuracion.packages) {
+                jr.service = _patterns.serviceLocator;
+                return jr.service(configuracion.packages);
+            }
+
+            return Promise.resolve();
+        }, function (error) { 
+            return error; 
+        });
     } // end function
     //---------------------------------
 
@@ -678,41 +754,17 @@
     // Inicio Funciones Comunes
     //---------------------------------
 
-    /*
-        //---------------------------------
-        // Método similar al Jquery.extend, que combina propiedades entre objetos,
-        // mantiene la referencias de los objeto que se combinen
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // arguments:   Objetos que se quieren combinar, el primer parámetro
-        //              es al que see le van a referencias el resto de parámetros.
-        //---------------------------------
-        // Retorna:     Retorna el primer parámetro.
-        //---------------------------------
-    */
-    function fnExtend() {
-        var e = arguments[0];
-        delete arguments[0];
-        for (var i in arguments)
-            for (var key in arguments[i])
-                e[key] = arguments[i][key];
-
-        return e;
-    } // end function
-    //---------------------------------
-
-    /*
-        //---------------------------------
-        // Valida si el parametro es una tipo de objeto function
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @x:  {object} Valor a validar
-        //---------------------------------
-        // Retorna: Si el parámetro x es una función o no
-        //---------------------------------
-    */
+	/*
+		//---------------------------------
+		// Valida si el parametro es una tipo de objeto function
+		//---------------------------------
+		// Parámetros:
+		//---------------------------------
+		// @x:  {object} Valor a validar
+		//---------------------------------
+		// Retorna: Si el parámetro x es una función o no
+		//---------------------------------
+	*/
     function fnIsFunction(x) {
         return Object.prototype.toString.call(x) == '[object Function]';
     } // end function
@@ -720,11 +772,150 @@
 
     /*
         //---------------------------------
-        // Agrega texto dentro de la consola, para el manejo de errores
+        // Obtiene los parametros excepto el primero y retorna un array
         //---------------------------------
     */
+    function fnParametersWithoutFirst() {
+        var pars,
+            size = arguments.length;
+        if (size > 1) {
+            pars = [];
+            for(var i = 1; i < size; i++) pars[pars.length] = arguments[i];
+        }
+        return pars;
+    } // end function
+    //---------------------------------
+
+	/*
+		//---------------------------------
+		// Valida si el parametro es una función y la ejecuca pasandole los parámetros que se indiquen
+		//---------------------------------
+		// Parámetros:
+		//---------------------------------
+		// @cb:     {function}  Función a ejecutar
+		// @arg1:   {any}       Parámetro a ejecutar
+		// @arg2:   {any}       Parámetro a ejecutar
+		// @arg...: {any}       Parámetro a ejecutar
+		//---------------------------------
+		// Retorna: El resultado de la función
+		//---------------------------------
+	*/
+    function fnExecFunction(cb) {
+        var pars = fnParametersWithoutFirst(...arguments);
+        if(fnIsFunction(cb)) return pars ? cb(...pars) : cb(pars);
+    } // end fnExecFunction
+    //---------------------------------
+
+    //---------------------------------
+    // Inicio Métodos para Arrays
+    //---------------------------------
+
+    /*
+        //---------------------------------
+        // Función para ordenar
+        //---------------------------------
+        // Ejemplo array.sortBy(function () { return this.index })
+        //---------------------------------
+        // Parámetros:
+        //---------------------------------
+        // @f:       Función anonima en la que se retorna la propiedad
+        //           por la que se quiere ordenar    {function}
+        //---------------------------------
+        // return:   Retorna el Array ordenado
+        //---------------------------------
+    */
+    Array.prototype.sortBy = function (f) {
+        for (var i = this.length; i;) {
+            var o = this[--i];
+            this[i] = [].concat(f.call(o, o, i), o);
+        } // fin for
+        this.sort(function (a, b) {
+            for (var i = 0, len = a.length; i < len; ++i) {
+                if (a[i] != b[i]) return a[i] < b[i] ? -1 : 1;
+            } // fin for
+            return 0;
+        }); // fin método sort
+        for (var i = this.length; i;) {
+            this[--i] = this[i][this[i].length - 1];
+        } // fin for
+        return this;
+    } // fin método
+    //---------------------------------
+
+    //---------------------------------
+    // Fin Métodos para Arrays
+    //---------------------------------
+
+    // Public API
+    //---------------------------------
+    // HTML
+
+    /*
+        //---------------------------------
+        // Inserta un elemento enseguida del valor referenciado.
+        // referencenode:   Elemento siguiente al nuevo nodo, o
+        //                  al nodo de referencia   {ELEMENT}
+        // newNode:         Elemento que va ser insertado antes que
+        //                  el referenciado         {ELEMENT}
+        //---------------------------------
+    */
+    function fnInsertAfter(referenceNode, newNode) {
+        referenceNode.parentNode.insertBefore(newNode, referenceNode.nextSibling);
+    } // end function
+    //---------------------------------
+
+    /*
+        //---------------------------------    
+        // Función para eliminar una tag
+        //---------------------------------    
+        // Parámetros:
+        //---------------------------------    
+        // object:  Objeto que será eliminado   {< />}
+        //---------------------------------    
+    */
+    function fnDeleteTag(object) {
+        if (!object) return;
+        object.parentNode.removeChild(object);
+    } // end method
+    //---------------------------------
+
+    /*
+        //---------------------------------
+        // Crea un objeto Date y recibe una fecha en formato json
+        //---------------------------------
+        // Parámetros:
+        //---------------------------------
+        // jsonDate:    Fecha que es convertida al serializar un DateTime de .Net
+        //              {/Date(1335205592410)/}
+        //---------------------------------
+    */
+    function fnParseJsonDate(jsonDate) {
+        var offset = new Date().getTimezoneOffset() * 60000;
+        var parts = /\/Date\((-?\d+)([+-]\d{2})?(\d{2})?.*/.exec(jsonDate);
+        if (parts[2] == undefined) parts[2] = 0;
+        if (parts[3] == undefined) parts[3] = 0;
+        return new Date(+parts[1] + offset + parts[2] * 3600000 + parts[3] * 60000);
+    } // end function
+    //---------------------------------
+
+    /*
+        //---------------------------------
+        // Toma la fecha y hora actual para retornar esta información como una cadena de texto. (yyyy-MM-dd hh:mm)
+        //---------------------------------
+    */
+    function fnNow() {
+        var date = new Date();
+        return date.getFullYear() + '-' + (date.getMonth() + 1) + '-' + (date.getDay() - 1) + ' ' + date.getHours() + ':' + date.getMinutes();
+    } // end function
+    //---------------------------------
+
+	/*
+		//---------------------------------
+		// Agrega texto dentro de la consola, para el manejo de errores
+		//---------------------------------
+	*/
     function fnErrorHandler(e) {
-        console.log('Error: ' + e.message);
+        console.log('Error: ', e.message);
     } // end function
     //---------------------------------
 
@@ -733,45 +924,76 @@
     //---------------------------------
 
 
+    //---------------------------------
+    // Inicio PWA's
+    //---------------------------------
+
+    (function() {
+        var _eventoPrompt;
+
+        window.addEventListener('beforeinstallprompt', function(e) {
+            // beforeinstallprompt Event fired
+            e.userChoice.then(function(choiceResult) {
+                console.log(choiceResult.outcome);
+
+                if(choiceResult.outcome == 'dismissed') {
+                    console.log('User cancelled home screen install');
+                }
+                else {
+                    console.log('User added to home screen');
+                }
+            });
+        });
+    })();
+
+    //---------------------------------
+    // Fin PWA's
+    //---------------------------------
 
 
     //---------------------------------
     // Inicio Patrones de Diseño
     //---------------------------------
 
-    (function() {
+    (function () {
         // Variables privadas
-        var _observer;
+        var _selfPatterns = this,
+            _observer;
 
         //---------------------------------
         // Inicio Patrón Command
         //---------------------------------
 
-        (function() {
-
+        (function () {
             // Constructor quien administra los observados
-            function Command() {  
-                var commands = {}, api = {}, ctx = this;
+            function Command() {
+                var _commands = {},
+                    _api = this;
 
-                api.on = function(command, fnCallback) { commands[command] = fnCallback; return ctx; }
-                api.off = function(command) { delete commands[command]; return ctx; }
-                api.trigger = function(command) { 
-                    return commands[command] && commands[command].apply(commands, [].slice.call(arguments, 1));
+                _api.on = function (command, fnCallback) {
+                    _commands[command] = function () {
+                        fnExecFunction(fnCallback, ...arguments);
+                        return _api;
+                    };
+                    return _api;
+                }
+                _api.off = function (command) {
+                    delete _commands[command];
+                    return _api;
+                }
+                _api.trigger = function (command) {
+                    let pars = fnParametersWithoutFirst(...arguments) || [];
+                    fnExecFunction(_commands[command], ...pars);
+                    return _api;
                 } // end function
 
                 // Public API
-                return api;
+                return _api;
             } // emnd constructor
-            
-            // Constructor observado, key, listenNotify
-            function Observer(name, fnCallback) {
-                this.update = fnCallback;
-                this.name = name;
-            } // end function
 
             // Public API
-            this.instance = new Command();
-        }).call(this.fnAddNS('command'));
+            Object.defineProperty(_selfPatterns, 'command', { get: () => new Command() });
+        })();
 
         //---------------------------------
         // Fin Patrón Command
@@ -782,71 +1004,177 @@
         // Inicio Patrón Observer
         //---------------------------------
 
-        (function() {
+        (function () {
+            var _currentId = 0;
 
             // Constructor quien administra los observados
-            function Subject() {  
-                var observers = [], api = {}, ctx = this;
+            function Subject() {
+                var _observers = new Map(),
+                    _api = this;
 
-                api.add = function(name, fnCallback) { observers.push(new Observer(name, fnCallback)); return ctx; }
-                api.remove = function(observer) { observers.splice(indexOf(observer, 0), 1); return ctx; }
-                api.notify = function(name, args) { 
-                    var observado = observers.fnFind(function(e) { return e.name ===  name });
-                    observado.update(args);
-                    return observado;
+                _api.add = function (cbListener) {
+                    var observed = new Observer(cbListener);
+                    _observers.set(observed.id, observed);
+                    return observed.id;
+                }
+                _api.remove = function (id) {
+                    _observers.delete(id);
+                    return _api;
+                }
+                _api.notify = function (id) {
+                    if (_observers.has(id)) _observers.get(id).update(fnParametersWithoutFirst(arguments));
+                    return _api;
                 } // end function
 
-                // Public API
-                return api;
-
-                function indexOf(obj, startIndex) {
-                    var i = startIndex;
-                    while(i < observers.length) {
-                        if(observers[i] === obj) return i;
-                        i++;
-                    } // end while
-                    return -1;
-                } // end function
+                return _api;
             } // end constructor
-            
+
             // Constructor observado, key, listenNotify
-            function Observer(name, fnCallback) {
-                this.update = fnCallback;
-                this.name = name;
+            function Observer(cbListener) {
+                this.update = function () {
+                    fnExecFunction(cbListener, ...arguments);
+                    return this;
+                };
+                this.id = ++_currentId;
             } // end function
 
             // Public API
-            this.instance = new Subject();
-        }).call(this.fnAddNS('observer'));
+            Object.defineProperty(_selfPatterns, 'observer', { get: () => new Subject() });
+        })();
 
         //---------------------------------
         // Fin Patrón Observer
         //---------------------------------
 
-        /*
-            //---------------------------------
-            // Se obtiene una instancia única del objeto a evaluar
-            //---------------------------------
-            // Parámetros
-            //---------------------------------
-            // @referencia:         {object}    Referencia al objeto que se quiere evaluar.
-            // @funcionInstancia:   {object}    Función que retorna la instancia del objeto a evaluar.
-            //---------------------------------
-            // Retorna: Objeto resultante de la funcion de instancia, más la propiedad de singletonInstance.
-            //---------------------------------
-        */
+		/*
+			//---------------------------------
+			// Se obtiene una instancia única del objeto a evaluar
+			//---------------------------------
+			// Parámetros
+			//---------------------------------
+			// @referencia:         {object}    Referencia al objeto que se quiere evaluar.
+			// @funcionInstancia:   {object}    Función que retorna la instancia del objeto a evaluar.
+			//---------------------------------
+			// Retorna: Objeto resultante de la funcion de instancia, más la propiedad de singletonInstance.
+			//---------------------------------
+		*/
         function fnSingleton(referencia, funcionInstancia) {
-            if(referencia && referencia.singletonInstance) return referencia;
-            if(!fnIsFunction(funcionInstancia)) return;
+            if (referencia && referencia.singletonInstance) return referencia;
+            if (!fnIsFunction(funcionInstancia)) return;
 
             referencia = funcionInstancia();
+            Object.defineProperty(referencia, { value: true });
             referencia.singletonInstance = true;
             return referencia;
         } // end function
         //---------------------------------
 
+        /*
+            //---------------------------------
+            // Patrón para el manejo de dependencias, usa get para solicitar los archivos del paquete
+            //---------------------------------           
+        */
+        (function() {
+            function ServiceLocator() {
+                var _self = this,
+                    _contenedor = new Map(),
+                    _packages = new Map(),
+                    _promisesGet = new Map();
+                
+                // Obtiene los paquetes si estos ya se solicitaron, si no se solicitan y se guardan
+                function _get(nameOrPackage) {
+                    var isStringPackage = typeof nameOrPackage === 'string',
+                        packageName = isStringPackage ? nameOrPackage : nameOrPackage.name,
+                        _package = _packages.get(packageName) || nameOrPackage;
+
+                    if(!_package.paths) throw "Package does not have any path: " + nameOrPackage;
+
+                    return new Promise(function(resolve, reject) {
+                        var resolvePackage, dependenciesPromises;
+                        if(_contenedor.has(packageName)) resolvePackage = Promise.resolve({ response: _contenedor.get(packageName) });
+                        else {
+                            dependenciesPromises = [];
+                            // Evaluar dependencias
+                            _package.dependencies && _package.dependencies.forEach(dependencie => {
+                                if(!_promisesGet.has(dependencie)) {
+                                    _promisesGet.set(dependencie, _get(dependencie));
+                                    dependenciesPromises.push(_promisesGet.get(dependencie));
+                                }
+                            });
+                            if(!_promisesGet.has(_package.name)) {
+                                _promisesGet.set(_package.name, Promise.all(dependenciesPromises).then(() => fnGet(_package.paths)));
+                            } 
+                            resolvePackage = _promisesGet.get(_package.name);
+                        }
+
+                        resolvePackage.then(function(result) {
+                            var packages = [];
+
+                            (!_packages.has(packageName) ? _setPackages([result.response]) : Promise.resolve()).then(function() {
+                                _package = _packages.get(packageName);
+                                _package.namespaces.forEach(function(ns) { packages.push(fnImport(ns)); });
+                                _contenedor.set(packageName, packages);                         
+                                resolve(packages);
+                            });
+
+                        }, reject);
+                    });
+                }
+
+                // Asigna la información de los paquetes, o descarga el json que los contiene
+                function _setPackages(pathOrPackages) {
+                    var resolve = typeof pathOrPackages === 'string' ? fnGet(pathOrPackages) : Promise.resolve({ response: pathOrPackages });
+                    return resolve.then(function(result) {
+                        if(!(result.response instanceof Array)) result.response = [result.response];
+                        result.response.forEach(_package => {
+                            if(_packages.has(_package.name)) return;
+                            _packages.set(_package.name, { 
+                                name: _package.name,
+                                paths: _package.paths, 
+                                namespaces: _package.namespaces, 
+                                dependencies: _package.dependencies
+                            });
+                        });
+                    });
+                }
+
+                function api(nameOrPackage) {
+                    if(typeof nameOrPackage === 'string') {
+                        return /.+(\.|\/).+/.test(nameOrPackage) ? _setPackages(nameOrPackage) : _get(nameOrPackage);
+                    }
+
+                    if(typeof nameOrPackage === 'object') return _setPackages(nameOrPackage);
+                    if(nameOrPackage instanceof Array) return _setPackages(nameOrPackage);
+                }
+
+                api.remove = function(nameOrPackage) {
+                    var isStringPackage = typeof nameOrPackage === 'string',
+                        packageName = isStringPackage ? nameOrPackage : nameOrPackage.name,
+                        _package = _packages.get(packageName) || nameOrPackage;
+
+                    if(_package) {
+                        (_package.namespaces) && _package.namespaces.forEach(ns => fnImport(ns, true));
+                        (_package.paths) && _package.paths.forEach(path => {
+                            var tag = document.querySelector(`[data-name="${path}"]`)
+                            tag && tag.parentNode.removeChild(tag);
+                        });
+                    }
+
+                    _contenedor.delete(nameOrPackage);
+                    _promisesGet.delete(nameOrPackage);
+                    
+                    return Promise.resolve();
+                }
+
+                return api;
+            }
+
+            // Public API
+            Object.defineProperty(_patterns, 'serviceLocator', { get: () => new ServiceLocator() });
+        })();
+
         // Public API
-        this.singleton = fnSingleton;
+        this.addNS('singleton', fnSingleton);
     }).call(_patterns);
 
     //---------------------------------
@@ -856,71 +1184,65 @@
 
 
 
-    
+
     //---------------------------------
     // Public API
     //---------------------------------
 
+    // Herramientas
+    jr.isFunction = fnIsFunction;
+    jr.parametersWithoutFirst = fnParametersWithoutFirst;
+    jr.execFunction = fnExecFunction;
+    jr.errorHandler = fnErrorHandler;
+    jr.getQuerys = getQuerys;
+    jr.insertAfter = fnInsertAfter;
+    jr.deleteTag = fnDeleteTag;
+    jr.parseJsonDate = fnParseJsonDate;
+    jr.now = fnNow;
     // Métodos para NameSpacing
-    this.Namespace = Namespace;
-    this.fnImport = fnImport;
-    this.fnDepenciesTrue = fnDepenciesTrue;
-    // Métodos para peticiones asícronas
-    this.get = fnGet;
-    this.fnCreateScriptTemp = fnCreateScriptTemp;
-    this.fnInitJMain = fnInitJMain;
-    // Métodos comunes
-    this.fnExtend = fnExtend;
-    this.fnIsFunction = fnIsFunction;
-    this.fnErrorHandler = fnErrorHandler;
+    jr.namespace = Namespace;
+    jr.import = fnImport;
+    // Métodos para peticiones asíncronas
+    jr.get = fnGet;
+    jr.tagScriptLink = fnTagScriptLink;
     // Patrones de Diseño
-    this.patterns = _patterns;
+    jr.patterns = _patterns;
     //---------------------------------
 
     //---------------------------------
     // Variables globales
     //---------------------------------
 
-    // Varable para validar los nombres de espacios
-    this.validateNS = /^[a-zA-Z]?[a-zA-z0-9]+$/;
+    // Variable para validar los nombres de espacios
+    jr.validateNS = /^[a-zA-Z]?[a-zA-z0-9]+$/;
     // Contador de tags
-    countTags = 0;
-    // Variables para los diferentes emuladores
-    this.URL = this.URL || this.webkitURL;
-    this.requestFileSystem = this.requestFileSystem || this.webkitRequestFileSystem;
-    this.persistentStorage = this.persistentStorage || navigator.webkitPersistentStorage;
+    jr.countTags = 0;
     // Variables de configuración
-    this.filesToUpdate = [];
-    this.urlWorkerImport;
+    jr.filesToUpdate = [];
     // Variable para conocer si se esta navegando bajo el protocolo seguro (https)
-    this.ssl = (location.origin.indexOf('https') > -1);
-    // Estructura de objeto para realizar peticiones asíncronas
-    this.REQUESTOBJECT = new function() {
-        return {
-            src: '{string} Ruta para el request.',
-            then: '{function} Función de callback.',
-            mime: '{string} Mime Type especial, este se puede obtener a través de la extensión.',
-            cache: '{bool} Identifica si se debe realizar la petición al servidor.',
-            method: '{string} Identifica el verbo que se debe usar en la petición.',
-            value: '{Object} Valores que se enviaran en la petición.'
-        }
-    } // end function
+    jr.ssl = location.origin.indexOf('https') > -1;
+    jr.dev = (location.hostname === "localhost" || location.hostname === "127.0.0.1");
     //-----------------------------
 
     // Legunaje de la página
-    this.lang = document.querySelector("html").getAttribute("lang");
+    jr.lang = document.querySelector("html").getAttribute("lang");
+
+    // Inicio de Peticiones asincronas
+    fnInitJMain();
 })(window);
 //---------------------------------
 
-//---------------------------------
-// Nombre de espacio principal Main for library
-// Se crea el nombre de espacio j, este será usada para el resto de plugins
-//---------------------------------
-var j = new Namespace();
-fnExtend(j, {
-    Author: 'Julian Ruiz',
-    Created: '2016-08-10',
-    Page: 'http://jerc91.github.io/',
-    Title: 'JMain'
-}); // fin combinación
-//---------------------------------
+
+/*
+REQUEST_OBJECT = new function () {
+    return {
+        src: '{string} Ruta para el request.',
+        then: '{function} Función de callback.',
+        catch: '{function} Función de callback.',
+        mime: '{string} Mime Type especial, este se puede obtener a través de la extensión.',
+        cache: '{bool} Identifica si se debe realizar la petición al servidor.',
+        method: '{string} Identifica el verbo que se debe usar en la petición.',
+        value: '{Object} Valores que se enviaran en la petición.'
+    }
+} // end function;
+*/
