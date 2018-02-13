@@ -641,6 +641,137 @@
     } // fin método
     //---------------------------------
 
+    /*
+        //---------------------------------
+        // Función para reemplazar un nodo
+        //---------------------------------
+    */
+    function fnReplaceWith(result, fragment) {
+        var wrapper = (fragment || document).querySelector(result.request.query),
+            currentNode = wrapper ? wrapper.firstElementChild : null;
+
+        if(result.fragment) {
+            if(currentNode) currentNode.replaceWith(result.fragment);
+            else wrapper.appendChild(result.fragment);
+        }
+    }
+
+    /*
+        //---------------------------------
+        // Función para realizar peticiones al servidor y crear un html dinámico
+        //---------------------------------
+    */
+    function fnSetFragmentFromHTML() {
+        return get(...arguments).spread(function() {
+            var results = arguments.length > 1 ? arguments : arguments[0],
+                fragment;
+            
+            return getRequest(fragment, results);
+
+            function getRequest(fragment, results) {
+                let pars, 
+                    size = results.length;
+                    
+                if(size > 1) {
+                    pars = [];
+                    for (var i = 0; i < size; i++) {
+                        pars[pars.length] = getRequest(fragment, results[i]);
+                    }
+                    return pars;
+                } else {
+                    return setFragment(fragment, results);
+                }
+            }
+            function setFragment(fragment, result) {
+                fragment = getFragment(fragment, result);
+                return result;
+            }
+            function getFragment(fragment, result) {
+                if(!fragment) {
+                    fragment = appendChild(document, result).fragment;
+                }
+                else appendChild(fragment, result);
+                return fragment;
+            }
+        });
+
+        function appendChild(fragment, result) {
+            if(result.request.noAppend) {
+                return parseResult(result);
+            }
+            fnReplaceWith(parseResult(result), fragment);
+            return fragment;
+        }
+        function parseResult(result) {
+            return Object.assign(result, {  
+                fragment: result.fragment || document.createRange().createContextualFragment(result.response)
+            });
+        }
+    }
+
+    /*
+        //---------------------------------
+        // Función para realizar peticiones al servidor y crear un html dinámico mediante plantilla
+        //---------------------------------
+    */
+    function fnCompileHTML() {
+        return get(...arguments).spread(function() {
+            var data = {};            
+            return getResults(data, ...getData(data, ...arguments));
+        });
+        function getData(data) {
+            var _resultsHtml = [],
+                results = jr.parametersWithoutFirst(...arguments) || [],
+                size = results.length;
+
+            for(var i = 0; i < size; i++) {
+                if(results[i] instanceof Array) results[i].forEach(result => {
+                    var currentResult = getData(data, result);
+                    if(currentResult.length) _resultsHtml[_resultsHtml.length] = currentResult;
+                });
+                else validataData(data, results[i]);                
+            }
+
+            return _resultsHtml;
+
+            function validataData(data, result) {
+                var isText = typeof result.response == 'string';
+                if(isText) _resultsHtml[_resultsHtml.length] = result;
+                else Object.assign(data, result.response);
+            }
+        }
+        function getResults(data) {
+            var results = jr.parametersWithoutFirst(...arguments) || [],
+                promises = results.map(result => {
+                    if(result instanceof Array) return getResults(data, ...result);
+                    return compile(data, result);
+                });
+
+            return results.length > 1 ? Promise.all(promises) : promises[0];
+        }
+        function compile(data, result) {
+            return new Promise((resolve, reject) => {
+                var worker = new Worker('assets/js/workers/compiler-worker.js');
+                worker.addEventListener("message", e => {
+                    worker.terminate();
+                    resolve(Object.assign(result, { response: e.data }));
+                }, false);
+                worker.postMessage({ template: result.response, data: data });
+            });
+        }
+    }
+
+    /*
+        //---------------------------------
+        // Función para realizar peticiones al servidor y crear un html dinámico mediante plantilla
+        //---------------------------------
+    */
+    function fnCompileSetHTML() {
+        var results = fnCompileHTML(...arguments);
+        if(results.length > 1) fnSetFragmentFromHTML(...results);
+        else return fnSetFragmentFromHTML(results);
+    }
+
 	/*
         //---------------------------------
         // fnInitJMain()
@@ -1199,12 +1330,19 @@
     jr.deleteTag = fnDeleteTag;
     jr.parseJsonDate = fnParseJsonDate;
     jr.now = fnNow;
+
     // Métodos para NameSpacing
     jr.namespace = Namespace;
     jr.import = fnImport;
+    jr.replaceWith = fnReplaceWith;
+    jr.setHTML = fnSetFragmentFromHTML;
+    jr.compileHTML = fnCompileHTML;
+    jr.compileSetHTML = fnCompileSetHTML;
+
     // Métodos para peticiones asíncronas
     jr.get = fnGet;
     jr.tagScriptLink = fnTagScriptLink;
+
     // Patrones de Diseño
     jr.patterns = _patterns;
     //---------------------------------
