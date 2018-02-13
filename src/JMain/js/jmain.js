@@ -416,7 +416,7 @@
 					});
 				})
 			*/
-            return Promise.all([navigator.serviceWorker.register(jr.serviceWorkerPath), navigator.serviceWorker.ready])
+            return Promise.all([navigator.serviceWorker.register(jr.serviceWorkerPath, { scope: './' }), navigator.serviceWorker.ready])
                 .then(function (registrations) {
                     if (jr.dev) console.log('Service Worker activado con el contexto:', registrations[0].scope);
                     return navigator.onLine ? registrations[0].update() : Promise.resolve();

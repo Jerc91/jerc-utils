@@ -1,0 +1,101 @@
+/* Popup para mostrar información */
+/* Inicio popup */
+#lightbox {
+  will-change: auto;
+  height: 100%;
+  position: relative;
+  z-index: 5;
+  transform: scale(0);
+  /* Botón cerrar lightbox */
+  /* Animación para mostrar el lightbox */
+  /* Animación para ocultar el lightbox */
+}
+#lightbox.active {
+  transform: translateY(-100%) scale(1);
+}
+#lightbox .content,
+#lightbox .bg {
+  bottom: 0;
+  left: 0;
+  position: fixed;
+  right: 0;
+  top: 0;
+}
+#lightbox .close,
+#lightbox .bg {
+  transform: scale(1);
+}
+#lightbox .content {
+  background: #fff;
+  border-radius: 8px;
+  margin: 0 auto;
+  padding: 10px;
+  transform: translateY(5%);
+  width: 90%;
+  z-index: 5;
+}
+#lightbox .bg {
+  background: rgba(0, 0, 0, 0.8);
+  cursor: pointer;
+  z-index: 4;
+}
+#lightbox.inactived .bg,
+#lightbox.inactived .close {
+  cursor: default;
+}
+#lightbox.inactived .close {
+  transform: scale(0);
+}
+#lightbox .close {
+  color: #cccccc;
+  cursor: pointer;
+  font-size: 2em;
+  padding: 0 3px;
+  position: absolute;
+  right: 8px;
+  text-decoration: none;
+  text-align: right;
+  top: 8px;
+}
+#lightbox .close:hover {
+  border-color: #000;
+  box-shadow: 2px 2px 2px lightbox-close-hover-shadow;
+  color: #000;
+  text-shadow: 2px 2px 2px lightbox-close-hover-shadow;
+}
+#lightbox > div {
+  padding: 5px 20px 20px;
+}
+#lightbox.in .content {
+  animation: lightbox-animate 1s ease;
+}
+#lightbox.out .content {
+  animation: lightbox-animate-out 1.5s ease;
+  animation-direction: reverse;
+}
+/* Fin popup*/
+/* Animación para oculta, mostrar, ocultar el lightbox */
+@keyframes lightbox-animate {
+  0% {
+    transform: translateY(-100%);
+  }
+  70% {
+    transform: translateY(8%);
+  }
+  100% {
+    transform: translateY(5%);
+  }
+}
+@keyframes lightbox-animate-out {
+  0% {
+    transform: translateY(-100%);
+  }
+  70% {
+    transform: translateY(8%);
+  }
+  100% {
+    transform: translateY(5%);
+  }
+}
+
+/*# sourceMappingURL=../maps/controls/jlightbox.css.map */

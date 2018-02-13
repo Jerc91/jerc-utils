@@ -1,0 +1,17 @@
+.jslide {
+  list-style: none;
+  display: flex;
+  flex-direction: row;
+  padding: 0;
+  transition: width 0.5ms ease;
+}
+.jslide > li {
+  transition: transform;
+}
+.btnLeft.disabled,
+.btnRight.disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/*# sourceMappingURL=../maps/controls/jslide.css.map */
