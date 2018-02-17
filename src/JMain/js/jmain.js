@@ -352,7 +352,7 @@
 			// Retorna: {Promise} Retorna un objeto Promise
 			//---------------------------------
 		*/
-        function fnSendRequestSW(request, fragment, promiseTags) {
+        function fnSendRequestSW(request, addResponse, promiseTags) {
             // Variables para cuando retorne información el worker
             var _copyRequest = fnGetRequest(request, true);
 
@@ -363,10 +363,11 @@
 
                     messageChannel.port1.onmessage = function (event) {
                         if (typeof event.data == 'string') {
+                            addResponse();
                             reject(event.data);
                             return;
                         }
-                        else fnReseiver(event.data, _copyRequest, resolve);
+                        else fnReseiver(event.data, _copyRequest, resolve, addResponse);
                     } // end function
 
                     // Config Get
@@ -382,13 +383,7 @@
                     );
                 });
             }).then(function(result) {
-                // TODO: Validar si es necesario el try catch
-                try {
-                    fnExecFunction(request.then, result);   
-                } catch (error) {
-                    _copyRequest.error = error;
-                    throw _copyRequest;
-                }
+                fnExecFunction(request.then, result);   
                 return result;
             }, function (error) {
                 _copyRequest.error = error;
@@ -458,14 +453,18 @@
 		//---------------------------------
 	*/
     function fnGet() {
-        var totalRequest = arguments.length,
-            pars = arguments;
+        let totalRequest = arguments.length,
+            pars = arguments,
+            fragment = document.createDocumentFragment(),
+            countRequest = 0,
+            countRequestCompleted = 0,
+            isParentElement = true;
 
         return new Promise(function(resolve, reject) {
             getRequests(...pars).then(function() {
                 resolve(...arguments);
             }, error => {
-                var result = { error: error };
+                let result = { error: error };
                 if (fnIsFunction(_cbErrorRequest)) fnExecFunction(_cbErrorRequest, result);
                 else return reject(result);
             });
@@ -473,8 +472,9 @@
 
         // Se valida un parámetro, un arreglo un Promise.all
         function getRequests() {
-            var size = arguments.length;
-            for (var i = 0; i < size; i++) {
+            let size = arguments.length;
+            
+            for (let i = 0; i < size; i++) {
                 if(arguments[i] instanceof Array)
                     arguments[i] = Promise.all(arguments[i].map(request => {
                         if(request instanceof Array) return getRequests(...request);
@@ -483,11 +483,41 @@
                 else
                     arguments[i] = getPromise(arguments[i]);
             }
+
             return size == 1 ? arguments[0] : Promise.all(arguments);
         }
+
         // Se valida para que se use una estructura de varios parámetros
         function getPromise(request) {
-            return request instanceof Promise ? request : _iRequester.sendRequest(request);
+            if(request instanceof Promise) return request;
+            else {
+                ++countRequest;
+                return _iRequester.sendRequest(request, addResponse);
+            }
+        }
+
+        // Valida la petición y maneja el árbol de nodos en el fragmento principal
+        function addResponse(result) {  
+            let jParent, size, query, wrapper;
+            ++countRequestCompleted;
+
+            if(result && result.fragment) {
+                fnReplaceWith(result, fragment, isParentElement);
+                isParentElement = false;
+            }
+
+            if(fragment.hasChildNodes() && countRequestCompleted == countRequest) {
+                jParent = fragment.querySelectorAll('[data-j-parent]');
+                size = jParent.length;
+                for(let i = 0; i < size; i++) {
+                    wrapper = document.querySelector(jParent[i].dataset.jParent);
+                    if(wrapper) {
+                        if(wrapper.firstElementChild) wrapper.firstElementChild.replaceWith(jParent[i]);
+                        else wrapper.appendChild(jParent[i]);
+                    }
+                }
+                WRAPPER_TAGS_GET.appendChild(fragment);
+            }
         }
     } // end function
     //---------------------------------
@@ -506,32 +536,47 @@
 		// @resolvePromise:   {function}  Función que resulve una promesa.
 		//---------------------------------
 	*/
-    function fnReseiver(response, request, resolve) {
-        var notRequestBlob = response.result instanceof Blob && request.mime !== 'blob',
+    function fnReseiver(response, request, resolve, addResponse) {
+        // TODO: Agregar validación de request.mime y de result.mime
+        var notRequestBlob = response.result instanceof Blob && !/blob|text/.test(request.mime),
             result = { 
                 request: request, 
                 response: notRequestBlob ? URL.createObjectURL(response.result) : response.result
             },
-            type = /^.*\.(css|js)([?#]{1}.*)?$/gi.exec(request.src);
+            type = /^css|js$/gi.exec(response.ext);
 
         // Cuando el archivo es un script o un estilo se crea la tag respectiva y se agrega al documento
-        if (type) {
+        if (type && notRequestBlob) {
             // Si es una archivo de tipo javascript o una hoja de estilos se crea una tag,
             // si se tiene una función para hacer callback se ejecuta esta.
             fnTagScriptLink({
-                href: result.response, type: type[1],
+                href: result.response, type: type[0],
                 name: request.src, repeatTag: request.repeatTag,
-                referenceTag: request.referenceTag
+                referenceTag: request.referenceTag,
+                addFragment: tag => {
+                    let fragment = document.createDocumentFragment();
+                    fragment.appendChild(tag);
+                    result.fragment = fragment;
+                    addResponse(result);
+                }
             }).then(function () {
                 // Config Get
                 fnExecFunction(_cbEndRequest, result);
-                resolve();
+                resolve(result);
             });
         } else {
-            // Config Get
+            // genera un fragment si la petición tiene una propiedad query o noAppend
+            if((result.request.query || result.request.noAppend) && !result.request.noFragment) {
+                // TODO: https://github.com/whatwg/html/issues/2993
+                let resultElement = fnParseHTML(result.response);
+                Object.assign(result, { fragment: resultElement });
+                if(!result.request.noAppend) addResponse(result);
+            } else {
+                addResponse(result);
+            }
             fnExecFunction(_cbEndRequest, result);
             resolve(result);
-        }
+        }        
     } // end function
     //---------------------------------
 
@@ -614,7 +659,6 @@
                     tag = document.createElement("link");
                     tag.href = d.href;
                     tag.rel = 'stylesheet';
-                    tag.type = 'text/css';
                     break;
             } // fin switch
 
@@ -635,8 +679,9 @@
             tag.addEventListener('load', resolve, false);
             tag.addEventListener('error', reject, false);
 
-            // Se agrega la nueva tag en el DOM            
-            WRAPPER_TAGS_GET.appendChild(tag);
+            // Se agrega la nueva tag en el DOM
+            if(d.addFragment) d.addFragment(tag);
+            else WRAPPER_TAGS_GET.appendChild(tag);            
         });
     } // fin método
     //---------------------------------
@@ -646,67 +691,33 @@
         // Función para reemplazar un nodo
         //---------------------------------
     */
-    function fnReplaceWith(result, fragment) {
-        var wrapper = (fragment || document).querySelector(result.request.query),
-            currentNode = wrapper ? wrapper.firstElementChild : null;
+    function fnReplaceWith(result, fragment, isParentElement) {
+        var wrapper = fragment ? fragment.querySelector(result.request.query) : undefined,
+            query = result.request.query;
 
         if(result.fragment) {
-            if(currentNode) currentNode.replaceWith(result.fragment);
-            else wrapper.appendChild(result.fragment);
+            if(wrapper && wrapper.firstElementChild) currentNode.replaceWith(result.fragment);
+            else if(wrapper && !wrapper.firstElementChild) wrapper.appendChild(result.fragment);
+            else if(!wrapper && query && isParentElement) {
+                result.fragment.firstElementChild.dataset.jParent = query;
+                fragment.appendChild(result.fragment);
+            }
+            else if(!wrapper && query && !isParentElement) {
+                wrapper = document.querySelector(query);
+                if(wrapper.firstElementChild) wrapper.firstElementChild.replaceWith(result.fragment);
+                else wrapper.appendChild(result.fragment);
+            }
+            else WRAPPER_TAGS_GET.appendChild(result.fragment);
         }
     }
 
     /*
         //---------------------------------
-        // Función para realizar peticiones al servidor y crear un html dinámico
+        // Función obtener un DocumentFragment de un string
         //---------------------------------
     */
-    function fnSetFragmentFromHTML() {
-        return get(...arguments).spread(function() {
-            var results = arguments.length > 1 ? arguments : arguments[0],
-                fragment;
-            
-            return getRequest(fragment, results);
-
-            function getRequest(fragment, results) {
-                let pars, 
-                    size = results.length;
-                    
-                if(size > 1) {
-                    pars = [];
-                    for (var i = 0; i < size; i++) {
-                        pars[pars.length] = getRequest(fragment, results[i]);
-                    }
-                    return pars;
-                } else {
-                    return setFragment(fragment, results);
-                }
-            }
-            function setFragment(fragment, result) {
-                fragment = getFragment(fragment, result);
-                return result;
-            }
-            function getFragment(fragment, result) {
-                if(!fragment) {
-                    fragment = appendChild(document, result).fragment;
-                }
-                else appendChild(fragment, result);
-                return fragment;
-            }
-        });
-
-        function appendChild(fragment, result) {
-            if(result.request.noAppend) {
-                return parseResult(result);
-            }
-            fnReplaceWith(parseResult(result), fragment);
-            return fragment;
-        }
-        function parseResult(result) {
-            return Object.assign(result, {  
-                fragment: result.fragment || document.createRange().createContextualFragment(result.response)
-            });
-        }
+    function fnParseHTML(str) {
+        return document.createRange().createContextualFragment(str);
     }
 
     /*
@@ -754,22 +765,11 @@
                 var worker = new Worker('assets/js/workers/compiler-worker.js');
                 worker.addEventListener("message", e => {
                     worker.terminate();
-                    resolve(Object.assign(result, { response: e.data }));
+                    resolve(Object.assign(result, { response: e.data, fragment: fnParseHTML(e.data) }));
                 }, false);
                 worker.postMessage({ template: result.response, data: data });
             });
         }
-    }
-
-    /*
-        //---------------------------------
-        // Función para realizar peticiones al servidor y crear un html dinámico mediante plantilla
-        //---------------------------------
-    */
-    function fnCompileSetHTML() {
-        var results = fnCompileHTML(...arguments);
-        if(results.length > 1) fnSetFragmentFromHTML(...results);
-        else return fnSetFragmentFromHTML(results);
     }
 
 	/*
@@ -1335,10 +1335,8 @@
     jr.namespace = Namespace;
     jr.import = fnImport;
     jr.replaceWith = fnReplaceWith;
-    jr.setHTML = fnSetFragmentFromHTML;
     jr.compileHTML = fnCompileHTML;
-    jr.compileSetHTML = fnCompileSetHTML;
-
+    
     // Métodos para peticiones asíncronas
     jr.get = fnGet;
     jr.tagScriptLink = fnTagScriptLink;

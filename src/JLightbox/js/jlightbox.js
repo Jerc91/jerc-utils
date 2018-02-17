@@ -52,16 +52,17 @@
         // Asignación HTML, Node
         if (typeof html === 'string') 
             html = document.createRange().createContextualFragment(html);
+
         if(contentLB.firstElementChild) contentLB.removeChild(contentLB.firstElementChild);
-        popupClone.querySelector(`.${classContentLB}`).appendChild(html);
+        if(html) popupClone.querySelector(`.${classContentLB}`).appendChild(html);
 
         if (popupClone) {
             // Bg
-            popupBg.handlerClick = popupBg.handlerClick || fnHide.bind(ctx, null);
+            popupBg.handlerClick = popupBg.handlerClick || fnHide.bind(ctx);
             popupBg.removeEventListener('click', popupBg.handlerClick);
             popupBg.addEventListener('click', popupBg.handlerClick);
             // Close
-            popupClose.handlerClick = popupClose.handlerClick || fnHide.bind(ctx, null);
+            popupClose.handlerClick = popupClose.handlerClick || fnHide.bind(ctx);
             popupClose.removeEventListener('click', popupClose.handlerClick);
             popupClose.addEventListener('click', popupClose.handlerClick);
             // KeyDown
@@ -110,8 +111,6 @@
         var ctx = this,
             popup = ctx.popup || document.getElementById(identifier);
         ctx.popup = popup;
-
-        if(e && !ctx.popup.isEqualNode(e.target)) return;
 
         if (popup) {
             popup.classList.remove(classIn);

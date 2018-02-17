@@ -1,3 +1,5 @@
+/*inicio variables*/
+/*fin variables*/
 /*
     Get animations from:
     http://projects.lukehaas.me/css-loaders/
@@ -17,16 +19,16 @@
   right: 0;
   top: 0;
   transition: transform 0s, opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  transform: scale(0);
-  will-change: transform, opacity;
+  transform: scale(0) translateZ(0);
+  will-change: auto;
   z-index: 5;
 }
 .blockUI.on {
   opacity: 1;
-  transform: scale(1);
+  transform: scale(1) translateZ(0);
 }
 .blockUI.off {
-  transition: opacity 0.25s linear, transform 0s cubic-bezier(0.4, 0, 0.2, 1) 0.25s;
+  transition: opacity 0.25s linear, transform 0s 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .blockUI .spinner.a1 {
   display: block;

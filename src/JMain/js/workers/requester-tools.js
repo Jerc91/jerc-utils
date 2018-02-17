@@ -122,7 +122,8 @@ self.tools = {};
         return { 
             result: data.result, 
             path: data.src, 
-            observedId: data.observedId 
+            observedId: data.observedId,
+            ext: data.ext
         };
     }  // fin método
     //---------------------------------
@@ -139,7 +140,10 @@ self.tools = {};
         //---------------------------------
     */
     function fnGetMime(data) {
-        var mime, extension, indiceQuery = data.name.indexOf('?'), nameSrc = data.name;
+        var mime, extension, 
+            indiceQuery = data.name.indexOf('?'), 
+            nameSrc = data.name;
+
         if(indiceQuery > -1) nameSrc = nameSrc.substring(0, indiceQuery);
         extension = nameSrc.split('.');
         extension = extension[extension.length - 1].toLowerCase();
@@ -149,6 +153,7 @@ self.tools = {};
             case 'jpg': 
             case 'png': 
                 mime = MIMES.BLOB;
+                extension = 'blob';
                 break;
             case 'css':
                 mime = MIMES.CSS;
@@ -169,9 +174,11 @@ self.tools = {};
                 break;
             default:
                 mime = MIMES.JS;
+                extension = 'js';
                 break;
         }
 
+        data.ext = extension;
         data.mime = data.mime || mime;
     } // end function
     //---------------------------------
@@ -298,7 +305,10 @@ self.tools = {};
     */
     function fnSaveResponseDB(data) {
         return getDB().then(database => {
-            let resquest = database.transaction(DB.TABLE, 'readwrite').objectStore(DB.TABLE).put({ name: data.name, date: data.date });
+            let resquest = database.transaction(DB.TABLE, 'readwrite').objectStore(DB.TABLE).put({ 
+                name: data.name, date: data.date 
+            });
+
             return getRequestComplete(resquest).then(request => {
                 _filestToUpdateSaved[data[DB.KEYPATH]] = data.date;
                 return data;

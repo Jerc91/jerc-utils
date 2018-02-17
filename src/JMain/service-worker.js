@@ -12,7 +12,7 @@ self.importScripts('/assets/js/workers/requester-tools.js');
 // Definición del módulo
 (function () {
     // Variables privadas
-    var CACHE_VERSION = '0.1.1774',
+    var CACHE_VERSION = '0.1.2197',
         CACHE_FILES = [
     "assets/css/no-save.css",
     "assets/fonts/fontawesome-webfont.ttf",

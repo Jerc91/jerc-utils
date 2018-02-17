@@ -58,13 +58,20 @@
         ctx.promise = new Promise((resolve, reject) => {
             try {
                 fnConfiguracionDefecto();
-                fnCalcularAnchoMaximo();
-                fnGenerarEstilosElementos();
-                ctx.maxElementsShow == 1 && fnCrearEstilosItemPrincipal();
-                fnConfigurarBotones();
-                pars.animations && fnCrearEstilosAnimaciones();
-                fnCrearTagLink(resolve);
-                fnFinalizarConfiguracion();
+                if(pars.width || pars.maxElementsShow > 1) {
+                    fnCalcularAnchoMaximo();
+                    fnGenerarEstilosElementos();
+                    fnConfigurarBotones();
+                    ctx.maxElementsShow == 1 && fnCrearEstilosItemPrincipal();
+                    pars.animations && fnCrearEstilosAnimaciones();
+                    fnCrearTagLink(resolve);
+                    fnFinalizarConfiguracion();
+                } else {
+                    ctx.slideElement.classList.add('pme');
+                    fnConfigurarBotones();
+                    fnFinalizarConfiguracion();
+                    resolve();
+                }                
             } catch(e) {
                 reject(e);
             }
@@ -108,7 +115,7 @@
             }
 
             // Se obtiene el ancho del contenedor, si no se ha pasado dentro de la configuración
-            ctx.width = pars.width = pars.width || pars.contenedorSlideElement.getBoundingClientRect().width;
+            if(pars.width) ctx.width = pars.width;
             
             // Se configuran los items de los elementos
             pars.count = ctx.slideElement.children.length || pars.list;
@@ -576,7 +583,7 @@
     */
     function handlerTransitionEnd(ctx, e) {
         if(!ctx.firstChild.isEqualNode(e.target)) return;
-        requestAnimationFrame(() => fnSetNotActiveSlide(ctx));
+        fnSetNotActiveSlide(ctx);
     }
     //---------------------------------    
 

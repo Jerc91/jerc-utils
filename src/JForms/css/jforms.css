@@ -1,3 +1,5 @@
+/*inicio variables*/
+/*fin variables*/
 .form {
   font-size: 13px;
   list-style: none;
@@ -22,14 +24,14 @@
 .form h4 i {
   margin-right: 10px;
   transform: rotate(0);
-  transition: ease 500ms transform;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .form ul {
   list-style: none outside;
   opacity: 1;
   padding: 20px 0;
   margin: 0 auto;
-  transition: opacity, margin 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: opacity, margin 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   width: 100%;
 }
 .form ul li {
@@ -72,7 +74,7 @@
   max-height: 32px;
   max-width: 230px;
   padding: 5px 5px 5px 25px;
-  transition: width, border .25s;
+  transition: width, border 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   width: 200px;
 }
 .form input:required:valid + .tooltipForm,
@@ -296,7 +298,7 @@ button.button {
   text-align: left;
   text-shadow: rgba(0, 0, 0, 0.2) 0px 2px 4px;
   text-decoration: none;
-  transition: ease 500ms transform;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   width: auto;
 }
 a.button:focus,
