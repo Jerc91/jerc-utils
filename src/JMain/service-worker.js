@@ -7,26 +7,26 @@
 self.importScripts('/assets/js/workers/requester-tools.js');
 
 // Varables del módulo
-/** @const */ self.requester = {};
+self.requester = {};
 
 // Definición del módulo
 (function () {
     // Variables privadas
-    var CACHE_VERSION = '0.1.2197',
+    let CACHE_VERSION = self.tools.constants.CACHE_VERSION,
+        HEADER_JR = self.tools.constants.HEADER_JR,
         CACHE_FILES = [
-    "assets/css/no-save.css",
-    "assets/fonts/fontawesome-webfont.ttf",
-    "assets/fonts/fontawesome-webfont.woff2",
-    "assets/fonts/roboto/Roboto-Light.woff2",
-    "assets/fonts/roboto/Roboto-Regular.ttf",
-    "assets/fonts/roboto/Roboto-Regular.woff2",
-    "assets/js/jmain.js",
-    "assets/js/workers/filesystem-worker.js",
-    "assets/js/workers/requester-tools.js",
-    "controllers/controller-main.js",
-    "favicon.ico",
-    "index.html"
-],
+            "assets/css/no-save.css",
+            "assets/fonts/fontawesome-webfont.ttf",
+            "assets/fonts/fontawesome-webfont.woff2",
+            "assets/fonts/roboto/Roboto-Light.ttf",
+            "assets/fonts/roboto/Roboto-Light.woff2",
+            "assets/js/jmain.js",
+            "assets/js/workers/requester-worker.js",
+            "assets/js/workers/requester-tools.js",
+            "controllers/controller-main.js",
+            "favicon.ico",
+            "index.html"
+        ],
         CACHE_CURRENT,
         ORIGIN_PATH = '',
         FILESTOUPDATE = 'assets/config/filesToUpdate.json',
@@ -37,7 +37,7 @@ self.importScripts('/assets/js/workers/requester-tools.js');
     paths = location.href.split('/');
     ORIGIN_PATH = paths.splice(0, paths.length - 1).join('/');
     ORIGIN_PATH += '/';
-
+    
     // Errores    
     self.tools.factoryError(fnHandleMessagesError);
 
@@ -49,7 +49,7 @@ self.importScripts('/assets/js/workers/requester-tools.js');
     function fnInit() {
         if (INIT_SERVICE) return Promise.resolve();
         return caches.keys().then(keys => {
-            return Promise.all(keys.map(function (key, i) {
+            return Promise.all(keys.map((key, i) => {
                 if (key !== CACHE_VERSION) return caches.delete(keys[i]);
             }))
             .then(() => caches.has(CACHE_VERSION).then(result => {
@@ -121,21 +121,26 @@ self.importScripts('/assets/js/workers/requester-tools.js');
 		//---------------------------------
 	*/
     function fnFetch(event) {
-        var promiseCache = fnInit().then(function () {
-            var OFFLINEURL = 'index.html',
+        // Peticiones realizadas desde worker o para saltarse el cacheStorage
+        if(event.request.headers.has(HEADER_JR)) {
+            event.request.headers.remove(HEADER_JR);
+            return event.respondWith(fetch(event.request));
+        }
+
+        let promiseCache = fnInit().then(function () {
+            let OFFLINEURL = 'index.html',
                 HASHTAG = '#!',
                 request = event.request,
                 requestUrl = request.url.replace(ORIGIN_PATH, ''),
                 targetUrl;
 
-            targetUrl = (!requestUrl || requestUrl.indexOf(HASHTAG) !== -1) ? OFFLINEURL : requestUrl;
+            targetUrl = (!requestUrl || requestUrl.includes(HASHTAG)) ? OFFLINEURL : requestUrl;
 
-            return CACHE_CURRENT.match(targetUrl).then(function (responseCache) {
-                return responseCache ? responseCache : fetch(event.request.clone()).then(function (response) {
-                    // Con errores
+            return CACHE_CURRENT.match(targetUrl).then((responseCache) => {
+                if(responseCache) return responseCache;
+                return fetch(event.request).then((response) => {
                     if (!response || response.status !== 200) return response;
-                    var responseToCache = response.clone();
-                    CACHE_CURRENT.put(event.request, responseToCache);
+                    CACHE_CURRENT.put(event.request, response.clone());
                     return response;
                 });
             });
@@ -159,9 +164,6 @@ self.importScripts('/assets/js/workers/requester-tools.js');
         //---------------------------------
     */
     function fnMessage(event) {
-        event.data.saveFile = fnSaveFile;
-        event.data.getSavedFile = fnGetSavedFile;
-
         if (!navigator.onLine && event.data.src == FILESTOUPDATE) {
             return event.ports[0].postMessage({ result: [], path: FILESTOUPDATE, observedId: event.data.observedId });
         }
@@ -173,45 +175,6 @@ self.importScripts('/assets/js/workers/requester-tools.js');
             return event.ports[0].postMessage(error);
         });
     } // end function
-    //---------------------------------
-
-    /*
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @data: {object} Información de la petición a realizar.
-        //---------------------------------
-        // Función para obtener el archivo o la petición solicitada, cuando el archivo existe éste se lee del navegador 
-        // y se retorna la url del blob o el contenido del éste dependiendo del tipo de archivo (mime), si se presenta 
-        // un error al leer el archivo del navegador, se hace la petición al servidor.
-        //
-        // Cuando el servidor responda la petición con OK se guardará la respuesta en el navegador si así se configura
-        // en el parámetro de la función de inicio @cache.
-        //---------------------------------
-    */
-    function fnGetSavedFile(data) {
-        // Se obtiene el archivo desde el navegador
-        return CACHE_CURRENT.match(new Request(data.src)).then(function (response) {
-            return !response ? self.tools.sendRequest(data) : self.tools.getResult(data, response);
-        });
-    } // finend function
-    //---------------------------------
-
-    /*
-        //---------------------------------
-        // Se guarda la respuesta del servidor en la cache
-        //---------------------------------
-        // Parámetros:
-        //---------------------------------
-        // @data:       {object}    Información de la petición a realizar.
-        // @reponse:    {response}  Respuesta del servidor.
-        //---------------------------------
-    */
-    function fnSaveFile(data, response) {
-        data.date = new Date();
-        CACHE_CURRENT.put(response.url, response.clone());
-        return self.tools.getResult(data, response);
-    } // fin método
     //---------------------------------
 
     /*

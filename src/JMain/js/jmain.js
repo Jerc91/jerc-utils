@@ -33,7 +33,7 @@
 (function () {
 
     // Constantes
-    var FILESYSTEM_WORKER_PATH = 'assets/js/workers/filesystem-worker.js',
+    var REQUESTER_WORKER_PATH = 'assets/js/workers/requester-worker.js',
         SERVICE_WORKER_PATH = './service-worker.js',
         FILES_UPDATE_PATH = 'assets/config/filesToUpdate.json',
         QUERY_CONTAINER_TAGS_GET = 'dvContainerJGet',
@@ -41,7 +41,7 @@
 
     // Variables privadas de la función anonima autoejecutable
     var _patterns = new Namespace(),
-        _cantidadWorkers = 3,
+        _workersCount = 0,
         _iRequester;
 
     // Configuración get
@@ -196,11 +196,13 @@
     }
 
     //---------------------------------
-    // Espacio para fileSystem
+    // Espacio para Requester
     //---------------------------------
     (function () {
         var _workers = new Map(),
-            _indexWorkerActual = 0;
+            _indexWorkerActual = 0,
+            _registrationSW,
+            _singletonSW = false;
 
         /*
 			//---------------------------------
@@ -210,12 +212,12 @@
 			//---------------------------------
 		*/
         function fnGetWorker() {
-            var worker;
+            let worker;
 
             // Se genera un Worker y se obtiene un observador
-            if (_workers.size < _cantidadWorkers) {
-                worker = new Worker(jr.fileSystemWorkerPath);
-                worker.observador = _patterns.observer.instance;
+            if (_workers.size < jr.workersCount) {
+                worker = new Worker(jr.requesterWorkerPath);
+                worker.observador = _patterns.observer;
                 worker.addEventListener("message", fnListenerWoker, false);
                 worker.addEventListener("error", fnListenerWoker, false);
                 _workers.set(_workers.size, worker);
@@ -249,16 +251,16 @@
 			// Retorna: {Promise} Retorna un objeto Promise
 			//---------------------------------
 		*/
-        function fnSendRequest(request, fragment, promiseTags) {
+        function fnSendRequest(request, addResponse) {
             // Variables para cuando retorne información el worker
-            var _copyRequest = fnGetRequest(request, true);
+            let _copyRequest = fnGetRequest(request, true);
 
             // Se crea una nueva promesa
             return new Promise(function (resolve, reject) {
                 var command, worker;
 
                 // Se usa el patrón Command
-                command = _patterns.command.instance
+                command = _patterns.command
                     .on('message', fnReseiver)
                     .on('error', reject);
 
@@ -267,7 +269,7 @@
 
                 // Se usa el patrón Observador
                 _copyRequest.observedId = worker.observador.add(function (e) {
-                    command.trigger(e.type, e.data, request, resolve);
+                    command.trigger(e.type, e.data, request, resolve, addResponse);
                 });
 
                 // Config Get
@@ -288,45 +290,21 @@
 
         /*
             //---------------------------------
-            // fnDeleteWorkers()
             // Función para eliminar un arreglo de _workers
             //---------------------------------
-            // Parámetros:
-            //---------------------------------
-            // @workers: [{Worker}] Webworkers a eliminar
-            //---------------------------------
         */
-        function fnDeleteWorkers(workers) {
+        function fnDeleteWorkers() {
             if (!_workers) return;
-            if (!_workers.length) return;
-            do {
-                _workers[0].terminate();
-                _workers.splice(0, 1);
-            } while (_workers.length) // end do while 
+            if (!_workers.size) return;
+            
+            let keys = _workers.keys();
+            for(let srtKey of keys) {
+                _workers.get(srtKey).terminate();
+                _workers.delete(srtKey);
+            }
         } // end function
         //---------------------------------
-
-        /*
-			//---------------------------------
-			// Función que configura la lógica para guardar peticiones con fileSystem
-			//---------------------------------
-		*/
-        function fnInit() {
-            return Promise.resolve();
-        }
-        //---------------------------------
-
-        // Public API
-        this.sendRequest = fnSendRequest;
-        this.init = fnInit;
-    }).call(jr.addNS('fileSystem'));
-
-    //---------------------------------
-    // Espacio para service worker
-    //---------------------------------
-    (function () {
-        var _registratioSW;
-
+        
         /*
 			//---------------------------------
 			// Se obtiene la referencia del service worker
@@ -335,8 +313,8 @@
 			//---------------------------------
 		*/
         function getRegistrationSW() {
-            if (!_registratioSW) return navigator.serviceWorker.getRegistration().then(sw => _registratioSW = sw);
-            return Promise.resolve(_registratioSW);
+            if (!_registrationSW) return navigator.serviceWorker.getRegistration().then(sw => _registrationSW = sw);
+            return Promise.resolve(_registrationSW);
         } // end function
         //---------------------------------
 
@@ -352,9 +330,11 @@
 			// Retorna: {Promise} Retorna un objeto Promise
 			//---------------------------------
 		*/
-        function fnSendRequestSW(request, addResponse, promiseTags) {
+        function fnSendRequestSW(request, addResponse) {
+            if(jr.workersCount) return fnSendRequest(request, addResponse);
+
             // Variables para cuando retorne información el worker
-            var _copyRequest = fnGetRequest(request, true);
+            let _copyRequest = fnGetRequest(request, true);
 
             // Se crea una nueva promesa
             return new Promise(function(resolve, reject) {
@@ -403,6 +383,23 @@
 			//---------------------------------
 		*/
         function fnInitServiceWorker() {
+            if(_singletonSW) return Promise.resolve();
+            _singletonSW = true;
+
+            return Promise.all([
+                navigator.serviceWorker.register(jr.serviceWorkerPath, { scope: './' }), 
+                navigator.serviceWorker.ready
+            ]).then(function (registrations) {
+                if (jr.dev) console.log('Service Worker activado con el contexto:', registrations[0].scope);
+                return navigator.onLine ? registrations[0].update() : Promise.resolve();
+            }).then(function () {
+                navigator.serviceWorker.addEventListener('message', function (event) {
+                    console.log('Mensaje recibido del SW: ', JSON.stringify(event.data));
+                    // event.ports[0].postMessage("Client 1 Says 'Hello back!'");
+                });
+            });
+            
+
 			/* 
 				.then(function (registration) {
 				// TODO: implementar notificaciones push
@@ -411,21 +408,12 @@
 					});
 				})
 			*/
-            return Promise.all([navigator.serviceWorker.register(jr.serviceWorkerPath, { scope: './' }), navigator.serviceWorker.ready])
-                .then(function (registrations) {
-                    if (jr.dev) console.log('Service Worker activado con el contexto:', registrations[0].scope);
-                    return navigator.onLine ? registrations[0].update() : Promise.resolve();
-                }).then(function () {
-                    navigator.serviceWorker.addEventListener('message', function (event) {
-                        console.log('Mensaje recibido del SW: ', JSON.stringify(event.data));
-                        // event.ports[0].postMessage("Client 1 Says 'Hello back!'");
-                    });
-                });
         } // end function
         //---------------------------------
 
         // Public API
         this.sendRequest = fnSendRequestSW;
+        this.deleteWorkers = fnDeleteWorkers;
         this.init = fnInitServiceWorker;
     }).call(jr.addNS('serviceWorker'));
 
@@ -612,8 +600,14 @@
 		//---------------------------------
 	*/
     function fnGetRequest(request, removeFunctions) {
-        if (typeof request === 'string' || request instanceof String) return { src: request.toString() };
-        if (removeFunctions) return JSON.parse(JSON.stringify(request));
+        let copyRequest;
+        if (typeof request === 'string' || request instanceof String) return { src: request.toString(), useFS: jr.useFileSystem };
+        if (removeFunctions) {
+            copyRequest = JSON.parse(JSON.stringify(request));
+            copyRequest.useFS = jr.useFileSystem;
+            return copyRequest;
+        }
+        reqest.useFS = jr.useFileSystem;
         return request;
     } // end function
     //---------------------------------
@@ -780,35 +774,17 @@
     */
     function fnInitJMain() {
         var currentTag = document.currentScript,
-            configuracion = {  
-                useFS: false,
-                useSW: true,
-                workersCount: 3,
-            };
+            configuracion = { useSW: true};
 
         // Configuración defecto
         Object.assign(configuracion, document.currentScript.dataset);        
-        jr.useServiceWorker = configuracion.useSW;
+        jr.useFileSystem = configuracion.useFS;
 
         // Configuración paths
-        jr.fileSystemWorkerPath = configuracion.fileSystemWorkerPath || FILESYSTEM_WORKER_PATH;
+        jr.requesterWorkerPath = configuracion.requesterWorkerPath || REQUESTER_WORKER_PATH;
         jr.serviceWorkerPath = configuracion.serviceWorkerPath || SERVICE_WORKER_PATH;
 
-        // Asignación de interface para realizar las peticiones y guardar las respuestas
-        if (jr.useServiceWorker) _iRequester = jr.serviceWorker;
-        if (jr.useFileSystem) {
-            _iRequester = jr.fileSystem;
-
-            window.addEventListener('load', function (e) {
-                window.applicationCache.addEventListener('updateready', function () {
-                    if (window.applicationCache.status == window.applicationCache.UPDATEREADY) {
-                        window.applicationCache.swapCache();
-                        window.location.reload();
-                    } // end if
-                }, false); // end function updaterady
-            }, false); // end function load
-        }
-
+        _iRequester = jr.serviceWorker;
         _iRequester.init().then(function() {
             // Para agrupar las tags generadas con el get
             if(!WRAPPER_TAGS_GET.id) WRAPPER_TAGS_GET.id = QUERY_CONTAINER_TAGS_GET;
@@ -842,33 +818,61 @@
         var configuracion = {
             filesUpdatePath: FILES_UPDATE_PATH,
             getToWindow: true,
+            useFS: false,                
+            workersCount: 0,
         };
 
         // Configuración defecto
-        Object.assign(configuracion, opciones);        
+        Object.assign(configuracion, opciones);
         jr.useFileSystem = configuracion.useFS;
+        
+        // Asignación de interface para realizar las peticiones y guardar las respuestas
+        if (jr.useFileSystem) {
+            _iRequester = jr.fileSystem;
+
+            window.addEventListener('load', function (e) {
+                window.applicationCache.addEventListener('updateready', function () {
+                    if (window.applicationCache.status == window.applicationCache.UPDATEREADY) {
+                        window.applicationCache.swapCache();
+                        window.location.reload();
+                    } // end if
+                }, false); // end function updaterady
+            }, false); // end function load
+        }
 
         // Configuración paths
         jr.filesUpdatePath = configuracion.filesUpdatePath || FILES_UPDATE_PATH;
 
         // Configuración de funcón globales
-        _cbStartRequest = configuracion.cbStartRequest;
-        _cbEndRequest = configuracion.cbEndRequest;
-        _cbErrorRequest = configuracion.cbErrorRequest;
+        _cbStartRequest = configuracion.cbStartRequest || _cbStartRequest;
+        _cbEndRequest = configuracion.cbEndRequest || _cbEndRequest;
+        _cbErrorRequest = configuracion.cbErrorRequest || _cbErrorRequest;
+
+        // Configuración de hilos para solicitudes
+        _workersCount = configuracion.workersCount;
+        Object.defineProperty(jr, 'workersCount', {
+            set: value => {
+                _workersCount = value;
+                !_workersCount && _iRequester.deleteWorkers()
+            },
+            get: () => _workersCount
+        });
 
         // Variablesa windows
         if (configuracion.getToWindow) window.get = fnGet;
-        return fnGet({ src: jr.filesUpdatePath, cache: false }).then(function (result) {
-            jr.filesToUpdate = result.response;
+        return _iRequester.init().then(function() {
+            return fnGet({ src: jr.filesUpdatePath, cache: false }).then(function (result) {
+                jr.filesToUpdate = result.response;
 
-            if(configuracion.packages) {
-                jr.service = _patterns.serviceLocator;
-                return jr.service(configuracion.packages);
-            }
+                if(configuracion.packages) {
+                    jr.service = _patterns.serviceLocator;
+                    return jr.service(configuracion.packages);
+                }
 
-            return Promise.resolve();
-        }, function (error) { 
-            return error; 
+                return Promise.resolve();
+            }, function (error) { 
+                return error; 
+            });
         });
     } // end function
     //---------------------------------
@@ -1153,7 +1157,7 @@
                     return _api;
                 }
                 _api.notify = function (id) {
-                    if (_observers.has(id)) _observers.get(id).update(fnParametersWithoutFirst(arguments));
+                    if (_observers.has(id)) _observers.get(id).update(...fnParametersWithoutFirst(...arguments));
                     return _api;
                 } // end function
 

@@ -5,25 +5,42 @@ self.tools = {};
 
 // Definición del módulo
 (function () {
-    var _factoryError,
-        _filestToUpdateSaved;
+    let _factoryError,
+        _filestToUpdateSaved,
+        _currentCache,
+        _cacheVersion;
 
     // Mime types que permite el worker para importar archivos
-    var MIMES = {
-        BLOB: 'application/octet-stream',
-        CSS: 'text/css; charset="utf-8"',
-        IMG: 'image/jpeg',
-        JS: 'text/javascript; charset="utf-8"',
-        JSON: 'application/json; charset="utf-8"',
-        TEXT: 'text/plain; charset="utf-8"',
-        FORMQ: 'application/x-www-form-urlencoded',
-        FORMDATA: 'multipart/form-data'
-    }, DB = {
-        NAME: 'jrTable',
-        VERSION: 1,
-        TABLE: 'files',
-        KEYPATH: 'name'
-    }; // Tipos de archivo por defecto
+    const 
+        MIMES = {
+            BLOB: 'application/octet-stream',
+            CSS: 'text/css; charset="utf-8"',
+            IMG: 'image/jpeg',
+            JS: 'text/javascript; charset="utf-8"',
+            JSON: 'application/json; charset="utf-8"',
+            TEXT: 'text/plain; charset="utf-8"',
+            FORMQ: 'application/x-www-form-urlencoded',
+            FORMDATA: 'multipart/form-data'
+        }, 
+        DB = {
+            NAME: 'jrTable',
+            VERSION: 1,
+            TABLE: 'files',
+            KEYPATH: 'name'
+        },
+        CACHE_VERSION = '1',
+        HEADER_JR = 'H_JR';
+
+    /*
+        //---------------------------------
+        // Obtiene el cache inicial
+        // explorador éste es creado
+        //---------------------------------
+    */    
+    function fnGetCache() {
+        if(_currentCache) return Promise.resolve();
+        return caches.open(_cacheVersion).then(cache => _currentCache = cache);    
+    }
 
 	/*
 		//---------------------------------
@@ -45,7 +62,7 @@ self.tools = {};
 	*/
     function fnGetFile(pars) {
         // variables privadas
-        var data = {};
+        let data = {};
 
         // Se obtiene el nombre del archivo o ruta de la petición
         data.name = pars.src.split("/");
@@ -64,14 +81,20 @@ self.tools = {};
         data.date = Date.parse(data.files[data.name]);
         data.srcToRequest = `${location.origin}/${pars.src}`;
 
+        // Si se utiliza un alojamiento diferente a cacheStorage
+        data.getSavedFile = data.getSavedFile || fnGetSavedFile;
+        data.saveFile = data.saveFile || fnSaveFile;
+
         /*
             // Si el archivo se encuentra en el .json de archivos a actualizar (filesToUpdate) se valida la fecha
             // de la última modificación, con la fecha que se encuentra en el archivo local y si es mayor la fecha 
             // del objeto es mayor a la del local entonces se hace la petición al servidor y se guarda en el navegador.
         */
-        return fnIsUpdateFile(data).then(updated => {
-            return ((!updated || !data.cache) ? fnSendRequest(data) : data.getSavedFile(data)).then(fnGetObject, fnOnError);
-        }, fnOnError);
+        return fnGetCache().then(() => {
+            return fnIsUpdateFile(data).then(updated => {
+                return ((!updated || !data.cache) ? fnSendRequest(data) : data.getSavedFile(data)).then(fnGetObject, fnOnError);
+            }, fnOnError);
+        });
     } // fin fnInit
     //---------------------------------
 
@@ -88,12 +111,15 @@ self.tools = {};
 		//---------------------------------
 	*/
     function fnSendRequest(data) {
-        var request = new Request(data.srcToRequest, {
-            method: data.method,
-            cache: 'no-cache',
-            headers: new Headers({ "Content-Type": data.mime }),
-            body: JSON.stringify(data.value)
-        });
+        let request = new Request(data.srcToRequest, {
+                method: data.method,
+                cache: 'no-cache',
+                headers: new Headers({ 
+                    "Content-Type": data.mime,
+                    HEADER_JR: HEADER_JR
+                }),
+                body: JSON.stringify(data.value)
+            });
 
         // Se obtiene la respuesta del servidor y se retorna la promesa
         return fetch(request).then(function (response) {
@@ -336,6 +362,45 @@ self.tools = {};
         });
     }
 
+    /*
+        //---------------------------------
+        // Parámetros:
+        //---------------------------------
+        // @data: {object} Información de la petición a realizar.
+        //---------------------------------
+        // Función para obtener el archivo o la petición solicitada, cuando el archivo existe éste se lee del navegador 
+        // y se retorna la url del blob o el contenido del éste dependiendo del tipo de archivo (mime), si se presenta 
+        // un error al leer el archivo del navegador, se hace la petición al servidor.
+        //
+        // Cuando el servidor responda la petición con OK se guardará la respuesta en el navegador si así se configura
+        // en el parámetro de la función de inicio @cache.
+        //---------------------------------
+    */
+    function fnGetSavedFile(data) {
+        // Se obtiene el archivo desde el navegador
+        return _currentCache.match(new Request(data.srcToRequest)).then(function (response) {
+            return !response ? fnSendRequest(data) : fnGetResult(data, response);
+        });
+    } // finend function
+    //---------------------------------
+
+    /*
+        //---------------------------------
+        // Se guarda la respuesta del servidor en la cache
+        //---------------------------------
+        // Parámetros:
+        //---------------------------------
+        // @data:       {object}    Información de la petición a realizar.
+        // @reponse:    {response}  Respuesta del servidor.
+        //---------------------------------
+    */
+    function fnSaveFile(data, response) {
+        data.date = new Date();
+        _currentCache.put(response.url, response.clone());
+        return fnGetResult(data, response);
+    } // fin método
+    //---------------------------------
+
     //---------------------------------
     // Public API
     //---------------------------------
@@ -344,5 +409,11 @@ self.tools = {};
     this.sendRequest = fnSendRequest;
     this.saveResponseDB = fnSaveResponseDB;
     this.getResult = fnGetResult;
+
+    // Export constants
+    this.constants = {
+        HEADER_JR: HEADER_JR,
+        CACHE_VERSION: CACHE_VERSION
+    };
     //---------------------------------
 }).call(self.tools);
