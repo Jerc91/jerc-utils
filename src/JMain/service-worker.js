@@ -12,8 +12,9 @@ self.requester = {};
 // Definición del módulo
 (function () {
     // Variables privadas
-    let CACHE_VERSION = self.tools.constants.CACHE_VERSION,
+    let CACHE_VERSION = self.tools.constants.CACHE_VERSION || '1',
         HEADER_JR = self.tools.constants.HEADER_JR,
+        FILESTOUPDATE = self.tools.FILESTOUPDATE,
         CACHE_FILES = [
             "assets/css/no-save.css",
             "assets/fonts/fontawesome-webfont.ttf",
@@ -29,7 +30,6 @@ self.requester = {};
         ],
         CACHE_CURRENT,
         ORIGIN_PATH = '',
-        FILESTOUPDATE = 'assets/config/filesToUpdate.json',
         INIT_SERVICE = false,
         paths = [];
 

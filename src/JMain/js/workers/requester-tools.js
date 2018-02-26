@@ -8,7 +8,7 @@ self.tools = {};
     let _factoryError,
         _filestToUpdateSaved,
         _currentCache,
-        _cacheVersion;
+        _firstLoadPage;
 
     // Mime types que permite el worker para importar archivos
     const 
@@ -29,7 +29,8 @@ self.tools = {};
             KEYPATH: 'name'
         },
         CACHE_VERSION = '1',
-        HEADER_JR = 'H_JR';
+        HEADER_JR = 'H_JR',
+        FILESTOUPDATE = 'assets/config/filesToUpdate.json';
 
     /*
         //---------------------------------
@@ -39,7 +40,7 @@ self.tools = {};
     */    
     function fnGetCache() {
         if(_currentCache) return Promise.resolve();
-        return caches.open(_cacheVersion).then(cache => _currentCache = cache);    
+        return caches.open(CACHE_VERSION).then(cache => _currentCache = cache);    
     }
 
 	/*
@@ -111,6 +112,10 @@ self.tools = {};
 		//---------------------------------
 	*/
     function fnSendRequest(data) {
+        if(FILESTOUPDATE == data.src &&_firstLoadPage) {
+            return fnGetResult(data, new Request(data.srcToRequest, { method: 'POST', body: '[]' }));  
+        }
+
         let request = new Request(data.srcToRequest, {
                 method: data.method,
                 cache: 'no-cache',
@@ -274,8 +279,11 @@ self.tools = {};
 
         return new Promise((resolve, reject) => {
             request = indexedDB.open(DB.NAME, DB.VERSION);
+            _firstLoadPage = false;
+
             // Se crea estructura de la base de datos
             request.onupgradeneeded = e => {
+                _firstLoadPage = true;
                 database = e.target.result;
                 objectStore = database.createObjectStore(DB.TABLE, { keyPath: DB.KEYPATH });
                 objectStore.createIndex(DB.TABLE, DB.KEYPATH);
@@ -303,6 +311,8 @@ self.tools = {};
             }
 
             getDB().then(database => {
+                if(FILESTOUPDATE == data.src && _firstLoadPage) return resolve(false);
+
                 let resquest = database.transaction(DB.TABLE, 'readonly').objectStore(DB.TABLE).getAll();
                 return getRequestComplete(resquest).then(request => {
                     _filestToUpdateSaved = {};
@@ -413,7 +423,8 @@ self.tools = {};
     // Export constants
     this.constants = {
         HEADER_JR: HEADER_JR,
-        CACHE_VERSION: CACHE_VERSION
+        CACHE_VERSION: CACHE_VERSION,
+        FILESTOUPDATE: FILESTOUPDATE
     };
     //---------------------------------
 }).call(self.tools);
