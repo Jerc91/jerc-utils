@@ -133,6 +133,8 @@ self.tools = {};
             if(!data.cache) promiseReponse = fnGetResult(data, response);
             else promiseReponse = data.saveFile(data, response).then(fnSaveResponseDB);
             return promiseReponse;
+        }, error => {
+           throw error.message;
         });
     } // fin método
     //---------------------------------

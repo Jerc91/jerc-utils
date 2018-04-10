@@ -189,7 +189,6 @@
         for (var i = 0; i < size; ++i) {
             key = querys[i].substring(0, querys[i].indexOf('='));
             value = querys[i].substring(querys[i].indexOf('=') + 1, querys[i].length);
-
             qs[key] = decodeURIComponent(value.replace(/\+/g, " "));
         } // end for
         return qs;
@@ -392,13 +391,12 @@
             ]).then(function (registrations) {
                 if (jr.dev) console.log('Service Worker activado con el contexto:', registrations[0].scope);
                 return navigator.onLine ? registrations[0].update() : Promise.resolve();
-            }).then(function () {
+            }, fnErrorHandler).then(function () {
                 navigator.serviceWorker.addEventListener('message', function (event) {
                     console.log('Mensaje recibido del SW: ', JSON.stringify(event.data));
                     // event.ports[0].postMessage("Client 1 Says 'Hello back!'");
                 });
-            });
-            
+            }, fnErrorHandler);
 
 			/* 
 				.then(function (registration) {
@@ -451,10 +449,10 @@
         return new Promise(function(resolve, reject) {
             getRequests(...pars).then(function() {
                 resolve(...arguments);
-            }, error => {
-                let result = { error: error };
+            }, request => {
+                let result = { error: request.error };
                 if (fnIsFunction(_cbErrorRequest)) fnExecFunction(_cbErrorRequest, result);
-                else return reject(result);
+                return reject(result);
             });
         });
 
@@ -790,7 +788,7 @@
             if(!WRAPPER_TAGS_GET.id) WRAPPER_TAGS_GET.id = QUERY_CONTAINER_TAGS_GET;
             fnTagScriptLink({ href: currentTag.dataset.init, type: 'js' });
             !document.body.hasChildNodes(WRAPPER_TAGS_GET) && document.body.appendChild(WRAPPER_TAGS_GET);
-        });
+        }, fnErrorHandler);
     }
 
 	/*
@@ -863,15 +861,14 @@
         return _iRequester.init().then(function() {
             return fnGet({ src: jr.filesUpdatePath, cache: false }).then(function (result) {
                 jr.filesToUpdate = result.response;
-
+            }, function (result) {
+                fnErrorHandler(result.error);
+                jr.filesToUpdate = [];
+            }).then(function() {
                 if(configuracion.packages) {
                     jr.service = _patterns.serviceLocator;
                     return jr.service(configuracion.packages);
                 }
-
-                return Promise.resolve();
-            }, function (error) { 
-                return error; 
             });
         });
     } // end function
@@ -1050,7 +1047,7 @@
 		//---------------------------------
 	*/
     function fnErrorHandler(e) {
-        console.log('Error: ', e.message);
+        console.log('Error: ', e.message || e);
     } // end function
     //---------------------------------
 

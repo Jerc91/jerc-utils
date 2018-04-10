@@ -138,10 +138,13 @@ self.requester = {};
 
             return CACHE_CURRENT.match(targetUrl).then((responseCache) => {
                 if(responseCache) return responseCache;
-                return fetch(event.request).then((response) => {
+                return fetch(targetUrl).then((response) => {
                     if (!response || response.status !== 200) return response;
-                    CACHE_CURRENT.put(event.request, response.clone());
+                    CACHE_CURRENT.put(targetUrl, response.clone());
                     return response;
+                }, error => {
+                    console.log(error);
+                    if(targetUrl == OFFLINEURL) return;
                 });
             });
         });
