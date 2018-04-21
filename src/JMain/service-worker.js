@@ -132,13 +132,17 @@ self.requester = {};
                 HASHTAG = '#!',
                 request = event.request,
                 requestUrl = request.url.replace(ORIGIN_PATH, ''),
-                targetUrl;
+                targetUrl,
+                options,
+                cors;
 
             targetUrl = (!requestUrl || requestUrl.includes(HASHTAG)) ? OFFLINEURL : requestUrl;
+            cors = targetUrl.includes(self.location.origin);
+            if(!cors) { options = { mode: 'cors' }; } 
 
             return CACHE_CURRENT.match(targetUrl).then((responseCache) => {
                 if(responseCache) return responseCache;
-                return fetch(targetUrl).then((response) => {
+                return fetch(targetUrl, options).then((response) => {
                     if (!response || response.status !== 200) return response;
                     CACHE_CURRENT.put(targetUrl, response.clone());
                     return response;
