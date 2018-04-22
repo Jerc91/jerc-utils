@@ -136,7 +136,7 @@ self.requester = {};
                 options,
                 cors;
 
-            targetUrl = (!requestUrl || requestUrl.includes(HASHTAG)) ? OFFLINEURL : requestUrl;
+            targetUrl = (!requestUrl || requestUrl.includes(HASHTAG) || !requestUrl.indexOf('?')) ? OFFLINEURL : requestUrl;
             cors = targetUrl.includes(self.location.origin);
             if(!cors) { options = { mode: 'cors' }; } 
 
