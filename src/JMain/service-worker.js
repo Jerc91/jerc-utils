@@ -127,6 +127,10 @@ self.requester = {};
             return event.respondWith(fetch(event.request));
         }
 
+        if(event.request.url.startsWith(self.location.origin)) {
+            return event.respondWith(fetch(event.request.url, { mode: 'no-cors' }));
+        } 
+
         let promiseCache = fnInit().then(function () {
             let OFFLINEURL = 'index.html',
                 HASHTAG = '#!',
@@ -137,9 +141,7 @@ self.requester = {};
                 cors;
 
             targetUrl = (!requestUrl || requestUrl.includes(HASHTAG) || !requestUrl.indexOf('?')) ? OFFLINEURL : requestUrl;
-            cors = targetUrl.includes(self.location.origin);
-            if(!cors) { options = { mode: 'cors' }; } 
-
+            
             return CACHE_CURRENT.match(targetUrl).then((responseCache) => {
                 if(responseCache) return responseCache;
                 return fetch(targetUrl, options).then((response) => {
