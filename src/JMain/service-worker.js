@@ -12,7 +12,7 @@ self.requester = {};
 // Definición del módulo
 (function () {
     // Variables privadas
-    let CACHE_VERSION = self.tools.constants.CACHE_VERSION || '1',
+    let CACHE_VERSION = self.tools.constants.CACHE_VERSION || '0.0.1',
         HEADER_JR = self.tools.constants.HEADER_JR,
         FILESTOUPDATE = self.tools.FILESTOUPDATE,
         CACHE_FILES = [

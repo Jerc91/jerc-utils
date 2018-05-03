@@ -28,7 +28,7 @@ self.tools = {};
             TABLE: 'files',
             KEYPATH: 'name'
         },
-        CACHE_VERSION = '1',
+        CACHE_VERSION = '0.0.1',
         HEADER_JR = 'H_JR',
         FILESTOUPDATE = 'assets/config/filesToUpdate.json';
 
