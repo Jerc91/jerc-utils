@@ -1,0 +1,1 @@
+self.importScripts("../vendor/compiler.js"),self.addEventListener("message",(function(b){try{self.postMessage(self.Hogan.compile(b.data.template).render(b.data.data))}catch(b){}}));
