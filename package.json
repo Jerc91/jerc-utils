@@ -1,0 +1,32 @@
+{
+  "name": "jerc-utils",
+  "version": "1.0.0",
+  "files": [
+		"src/JMain/**/*.js",
+		"src/JSpinner/**/*.{js,css}",
+		"src/JSlide/**/*.{js,css}",
+		"src/JLightbox/**/*.{js,css}",
+		"src/JForms/**/*.{js,css}"
+  ],
+  "description": "Plugins para la creación de módulos web.",
+  "homepage": "https://github.com/jerc91/jerc-utils#readme",
+  "bugs": {
+    "url": "https://github.com/Jerc91/jerc-utils/issues",
+    "email": "jerc.691@gmail.com"
+  },
+  "author": {
+    "name": "Julian Ruiz",
+    "email": "jerc.691@gmail.com",
+    "url": "https://jerc91.github.io"
+  },
+  "keywords": [
+    "Jerc-Utils",
+    "Service-Worker",
+    "Cache"
+  ],
+  "license": "MIT",
+  "repository": {
+  	"type": "git",
+  	"url": "https://github.com/Jerc91/jerc-utils.git"
+  }
+}
