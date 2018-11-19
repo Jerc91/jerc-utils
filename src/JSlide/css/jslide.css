@@ -24,37 +24,37 @@
   opacity: 0.5;
 }
 .jslide.pme.a1 > li {
-  transform: translateX(-100%);
+  transform: translateX(-100%) translateZ(0);
 }
 .jslide.pme.a2 > li {
-  transform: translateX(-200%);
+  transform: translateX(-200%) translateZ(0);
 }
 .jslide.pme.a3 > li {
-  transform: translateX(-300%);
+  transform: translateX(-300%) translateZ(0);
 }
 .jslide.pme.a4 > li {
-  transform: translateX(-400%);
+  transform: translateX(-400%) translateZ(0);
 }
 .jslide.pme.a5 > li {
-  transform: translateX(-500%);
+  transform: translateX(-500%) translateZ(0);
 }
 .jslide.pme.a6 > li {
-  transform: translateX(-600%);
+  transform: translateX(-600%) translateZ(0);
 }
 .jslide.pme.a7 > li {
-  transform: translateX(-700%);
+  transform: translateX(-700%) translateZ(0);
 }
 .jslide.pme.a8 > li {
-  transform: translateX(-800%);
+  transform: translateX(-800%) translateZ(0);
 }
 .jslide.pme.a9 > li {
-  transform: translateX(-900%);
+  transform: translateX(-900%) translateZ(0);
 }
 .jslide.pme.a10 > li {
-  transform: translateX(-1000%);
+  transform: translateX(-1000%) translateZ(0);
 }
 .jslide.pme.a11 > li {
-  transform: translateX(-1100%);
+  transform: translateX(-1100%) translateZ(0);
 }
 .jslide.pme:not([class*="a1"]):not([class*="a2"]):not([class*="a3"]):not([class*="a4"]):not([class*="a5"]):not([class*="a6"]):not([class*="a7"]):not([class*="a8"]):not([class*="a9"]):not([class*="a10"]):not([class*="a11"]):not([class*="a12"]) > li:nth-child(1),
 .jslide.pme.a1 > li:nth-child(2),

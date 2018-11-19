@@ -4,11 +4,13 @@
 self.tools = {};
 
 // Definición del módulo
-(function () {
+(function() {
     let _factoryError,
-        _filestToUpdateSaved,
+        _filesClient,
+        _filesServer = [],
         _currentCache,
-        _firstLoadPage;
+        _firstLoadPage,
+        _dataBase;
 
     // Mime types que permite el worker para importar archivos
     const 
@@ -30,7 +32,7 @@ self.tools = {};
         },
         CACHE_VERSION = '0.0.1',
         HEADER_JR = 'H_JR',
-        FILESTOUPDATE = 'assets/config/filesToUpdate.json';
+        FILESTOUPDATE = '/assets/config/filesToUpdate.json';
 
     /*
         //---------------------------------
@@ -43,24 +45,24 @@ self.tools = {};
         return caches.open(CACHE_VERSION).then(cache => _currentCache = cache);    
     }
 
-	/*
-		//---------------------------------
-		// Inicio del worker, toma el FileSystem y antes toma el archivo, si el archivo no esta en
-		// explorador éste es creado
-		//---------------------------------
-		// Parámetros:
-		//---------------------------------
-		// @pars:           información del archivo a solicitar {}
-		//---------------------------------
-		// @pars.cache:     Para que no se guarde en el explorador de ser 0 ( 0 || 1)
-		// @pars.src:       Dirección del archivo a solicitar.  ''
-		// @pars.mime:      El tipo de mime que se traerá
-		// @pars.method:    Tipo de petición que se hará al servidor
-		// @pars.files:     Objeto que contiene los archivos a actualizar
-		//---------------------------------
-		// Retorna:	Retorna la respuesta del servidor
-		//---------------------------------
-	*/
+    /*
+        //---------------------------------
+        // Inicio del worker, toma el FileSystem y antes toma el archivo, si el archivo no esta en
+        // explorador éste es creado
+        //---------------------------------
+        // Parámetros:
+        //---------------------------------
+        // @pars:           información del archivo a solicitar {}
+        //---------------------------------
+        // @pars.cache:     Para que no se guarde en el explorador de ser 0 ( 0 || 1)
+        // @pars.src:       Dirección del archivo a solicitar.  ''
+        // @pars.mime:      El tipo de mime que se traerá
+        // @pars.method:    Tipo de petición que se hará al servidor
+        // @pars.files:     Objeto que contiene los archivos a actualizar
+        //---------------------------------
+        // Retorna:    Retorna la respuesta del servidor
+        //---------------------------------
+    */
     function fnGetFile(pars) {
         // variables privadas
         let data = {};
@@ -70,16 +72,12 @@ self.tools = {};
         data.name = data.name[data.name.length - 1];
 
         // Se combinan los parámetros de la petición a realizar, con parámetros por defecto
-        Object.assign(data, {
-            cache: true,
-            method: 'GET',
-            methodBody: 'blob'
-        }, pars);
+        Object.assign(data, { cache: true, method: 'GET', methodBody: 'blob' }, pars);
 
         // Se obtiene el mime de la petición
         fnGetMime(data);
 
-        data.date = Date.parse(data.files[data.name]);
+        data.date = Date.parse(_filesServer[data.name]);
         data.srcToRequest = `${location.origin}/${pars.src}`;
 
         // Si se utiliza un alojamiento diferente a cacheStorage
@@ -96,35 +94,35 @@ self.tools = {};
                 return ((!updated || !data.cache) ? fnSendRequest(data) : data.getSavedFile(data)).then(fnGetObject, fnOnError);
             }, fnOnError);
         });
-    } // fin fnInit
+    }
     //---------------------------------
 
-	/*
-		//---------------------------------
-		// Se hace solicitud al servidor y la respuesta es guardara con el API FileSystem, o CacheStorage
-		// dependiendo de la configuración.
-		//---------------------------------
-		// Parámetros:
-		//---------------------------------
-		// @data: 	{object} Información de la petición a realizar.
-		//---------------------------------
-		// Retorna una promesa de fetch
-		//---------------------------------
-	*/
+    /*
+        //---------------------------------
+        // Se hace solicitud al servidor y la respuesta es guardara con el API FileSystem, o CacheStorage
+        // dependiendo de la configuración.
+        //---------------------------------
+        // Parámetros:
+        //---------------------------------
+        // @data:     {object} Información de la petición a realizar.
+        //---------------------------------
+        // Retorna una promesa de fetch
+        //---------------------------------
+    */
     function fnSendRequest(data) {
-        if(FILESTOUPDATE == data.src &&_firstLoadPage) {
+        if(FILESTOUPDATE == data.src && _firstLoadPage) {
             return fnGetResult(data, new Request(data.srcToRequest, { method: 'POST', body: '[]' }));  
         }
 
         let request = new Request(data.srcToRequest, {
-                method: data.method,
-                cache: 'no-cache',
-                headers: new Headers({ 
-                    "Content-Type": data.mime,
-                    HEADER_JR: HEADER_JR
-                }),
-                body: JSON.stringify(data.value)
-            });
+            method: data.method,
+            cache: 'no-cache',
+            headers: new Headers({ 
+                "Content-Type": data.mime,
+                HEADER_JR: HEADER_JR
+            }),
+            body: JSON.stringify(data.value)
+        });
 
         // Se obtiene la respuesta del servidor y se retorna la promesa
         return fetch(request).then(function (response) {
@@ -136,7 +134,7 @@ self.tools = {};
         }, error => {
            throw error.message;
         });
-    } // fin método
+    }
     //---------------------------------
 
     /*
@@ -145,12 +143,14 @@ self.tools = {};
         //---------------------------------
         // Parámetros:
         //---------------------------------
-        // @data: 		{object} 	Información de la petición realizada.
+        // @data:         {object}     Información de la petición realizada.
         //---------------------------------
         // Retorna: Promesa con la respuesta de la petición
         //---------------------------------
     */
     function fnGetObject(data) {
+        if(data.response instanceof Response) return data.response;
+        
         // TODO: Garbage collector
         return { 
             result: data.result, 
@@ -158,7 +158,7 @@ self.tools = {};
             observedId: data.observedId,
             ext: data.ext
         };
-    }  // fin método
+    }
     //---------------------------------
 
     /*
@@ -213,7 +213,7 @@ self.tools = {};
 
         data.ext = extension;
         data.mime = data.mime || mime;
-    } // end function
+    }
     //---------------------------------
 
     /*
@@ -275,23 +275,28 @@ self.tools = {};
         //---------------------------------
     */
     function getDB() {
-        var request, 
-            objectStore,
-            database;
+        let request, 
+            objectStore;
 
-        return new Promise((resolve, reject) => {
-            request = indexedDB.open(DB.NAME, DB.VERSION);
+        return new Promise(async (resolve, reject) => {
+            if(_dataBase) return resolve(_dataBase);
+            
             _firstLoadPage = false;
+            if(navigator.onLine) _filesServer = await fetch(new Request(FILESTOUPDATE, { cache: 'no-cache' })).then(response => response.json());
+            else _filesServer = {};
+
+            request = indexedDB.open(DB.NAME, DB.VERSION);
 
             // Se crea estructura de la base de datos
-            request.onupgradeneeded = e => {
+            request.onupgradeneeded = async e => {
                 _firstLoadPage = true;
-                database = e.target.result;
-                objectStore = database.createObjectStore(DB.TABLE, { keyPath: DB.KEYPATH });
+                _dataBase = e.target.result;
+                objectStore = _dataBase.createObjectStore(DB.TABLE, { keyPath: DB.KEYPATH });
                 objectStore.createIndex(DB.TABLE, DB.KEYPATH);
-                objectStore.transaction.oncomplete = e => resolve(database);
-            }
-            getRequestComplete(request).then(e => resolve(e.target.result));
+                objectStore.transaction.oncomplete = e => resolve(_dataBase);
+            };
+
+            getRequestComplete(request).then(e => resolve(_dataBase = e.target.result));
         });
     }
     
@@ -308,7 +313,7 @@ self.tools = {};
     */
     function fnIsUpdateFile(data) {
         return new Promise((resolve, reject) => {
-            if (_filestToUpdateSaved) {
+            if (_filesClient) {
                 return resolve(updateFile(data));
             }
 
@@ -317,16 +322,19 @@ self.tools = {};
 
                 let resquest = database.transaction(DB.TABLE, 'readonly').objectStore(DB.TABLE).getAll();
                 return getRequestComplete(resquest).then(request => {
-                    _filestToUpdateSaved = {};
-                    resquest.result.forEach(record => _filestToUpdateSaved[record[DB.KEYPATH]] = record.date);
+                    _filesClient = {};
+                    resquest.result.forEach(record => _filesClient[record[DB.KEYPATH]] = record.date);
                     resolve(updateFile(data));
                 });
             });
         });
 
-        function updateFile(_data) {
-            let infoSaved = _filestToUpdateSaved[_data.name];
-            return infoSaved && !isNaN(_data.date) ? infoSaved.valueOf() >= _data.date : true;
+        async function updateFile(_data) {
+            let infoSaved = _filesClient[_data.name],
+                result = infoSaved && !isNaN(_data.date) ? infoSaved.valueOf() >= _data.date : true;            
+            
+            if(!result && await _currentCache.match(data.src)) result = true;
+            return result;
         }
     }
 
@@ -348,7 +356,7 @@ self.tools = {};
             });
 
             return getRequestComplete(resquest).then(request => {
-                _filestToUpdateSaved[data[DB.KEYPATH]] = data.date;
+                _filesClient[data[DB.KEYPATH]] = data.date;
                 return data;
             });
         });
@@ -367,6 +375,11 @@ self.tools = {};
         //---------------------------------
     */
     function fnGetResult(data, response) {
+        if(data.fromFetch) {
+            data.response = response;
+            return Promise.resolve(data);
+        }
+
         return response[data.methodBody]().then(result => {
             data.result = result;
             if(result instanceof Blob && !result.type) data.result = result.slice(result, result.size, data.mime);
@@ -393,7 +406,7 @@ self.tools = {};
         return _currentCache.match(new Request(data.srcToRequest)).then(function (response) {
             return !response ? fnSendRequest(data) : fnGetResult(data, response);
         });
-    } // finend function
+    }
     //---------------------------------
 
     /*
@@ -410,7 +423,7 @@ self.tools = {};
         data.date = new Date();
         _currentCache.put(response.url, response.clone());
         return fnGetResult(data, response);
-    } // fin método
+    }
     //---------------------------------
 
     //---------------------------------
