@@ -143,7 +143,7 @@ self.addEventListener("message", function (e) {
 	}
 	
 	// Get File
-	self.tools.constants.FILES_SERVER = data.filesServerToUpdate;
+	self.tools.constants.FILES_SERVER = data.filesServerToUpdate || {};
 	self.tools.getFile(data).then(datos => {
 		self.postMessage(datos);
 	}, error => {
