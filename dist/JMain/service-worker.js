@@ -194,18 +194,6 @@ self.requester = {};
 			targetUrl = (!requestUrl || requestUrl.includes(HASHTAG) || !requestUrl.indexOf('?')) ? OFFLINEURL : requestUrl;
 			
 			return self.tools.getFile({ src: targetUrl, fromFetch: true });
-
-			return CACHE_CURRENT.match(targetUrl, { ignoreSearch: true }).then(responseCache => {
-				if(responseCache) return responseCache;
-				return fetch(targetUrl, options).then((response) => {
-					if (!response || response.status !== 200) return response;
-					CACHE_CURRENT.put(targetUrl, response.clone());
-					return response;
-				}, error => {
-					console.log(error);
-					if(targetUrl == OFFLINEURL) return;
-				});
-			});
 		});
 
 		// Realiza la petición al cacheStorage o al servidor
@@ -237,6 +225,11 @@ self.requester = {};
 		});
 	}
 
+	/**
+	 * Obtiene la respuesta de una petición sea guardada o en línea
+	 * @param  {object} datos información de la petición
+	 * @return {Promise<object>}       Se resuelve al obtener la respuesta.
+	 */
 	function sendRequest(datos) {
 		if (!navigator.onLine && datos.src == FILESTOUPDATE) {
 			return Promise.resolve({ result: {}, path: FILESTOUPDATE, observedId: datos.observedId });
@@ -244,6 +237,7 @@ self.requester = {};
 
 		return self.tools.getFile(datos);
 	}
+
 
 	function updateFilesToUpdate() {
 		if(!navigator.onLine) return Promise.resolve(self.tools.constants.FILES_SERVER = {});

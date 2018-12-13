@@ -55,6 +55,13 @@
 	// Se crea el nombre de espacio j, este será usada para el resto de plugins
 	//---------------------------------
 	window.jr = new Namespace(fnInitConfigJMain);
+	Object.defineProperty(jr, 'workersCount', {
+		set: value => {
+			_workersCount = value;
+			!_workersCount && _iRequester.deleteWorkers();
+		},
+		get: () => _workersCount
+	});
 	
 	//---------------------------------
 	// inicio Métodos para Espaciones de Nombres
@@ -391,10 +398,12 @@
 				if (jr.dev) console.log('Service Worker activado con el contexto:', registrations[0].scope);
 				return navigator.onLine ? registrations[0].update() : Promise.resolve();
 			}, fnErrorHandler).then(function () {
-				sendMessageToSW({ command: 'filesToUpdate' }, datos => _filesServerToUpdate = datos);
 				navigator.serviceWorker.addEventListener('message', function (event) {
 					fnErrorHandler('Mensaje recibido del SW: ', JSON.stringify(event.data));
 					// event.ports[0].postMessage("Client 1 Says 'Hello back!'");
+				});
+				return new Promise(resolve => {
+					sendMessageToSW({ command: 'filesToUpdate' }, datos => resolve(_filesServerToUpdate = datos));
 				});
 			}, fnErrorHandler);
 
@@ -786,21 +795,24 @@
 	*/
 	function fnInitJMain() {
 		var currentTag = document.currentScript,
-			configuracion = { useSW: true};
+			configuracion = Object.assign({ useSW: true }, currentTag.dataset);
 
 		// Configuración defecto
-		Object.assign(configuracion, document.currentScript.dataset);        
 		jr.useFileSystem = configuracion.useFS;
+		if(configuracion.workersCount) {
+			jr.workersCount = parseInt(configuracion.workersCount);
+		}
 
 		// Configuración paths
 		jr.requesterWorkerPath = configuracion.requesterWorkerPath || REQUESTER_WORKER_PATH;
 		jr.serviceWorkerPath = configuracion.serviceWorkerPath || SERVICE_WORKER_PATH;
 
 		_iRequester = jr.serviceWorker;
+		
 		_iRequester.init().then(function() {
 			// Para agrupar las tags generadas con el get
 			if(!WRAPPER_TAGS_GET.id) WRAPPER_TAGS_GET.id = QUERY_CONTAINER_TAGS_GET;
-			fnTagScriptLink({ href: currentTag.dataset.init, type: 'js' });
+			fnTagScriptLink({ href: configuracion.init, type: 'js' });
 			!document.body.hasChildNodes(WRAPPER_TAGS_GET) && document.body.appendChild(WRAPPER_TAGS_GET);
 		}, fnErrorHandler);
 	}
@@ -842,13 +854,7 @@
 
 		// Configuración de hilos para solicitudes
 		_workersCount = configuracion.workersCount;
-		Object.defineProperty(jr, 'workersCount', {
-			set: value => {
-				_workersCount = value;
-				!_workersCount && _iRequester.deleteWorkers();
-			},
-			get: () => _workersCount
-		});
+		
 
 		// Variablesa windows
 		if (configuracion.getToWindow) window.get = fnGet;
