@@ -57,6 +57,9 @@
         ctx.active = true;
         ctx.promise = new Promise((resolve, reject) => {
             try {
+                ctx.toResolve = resolve;
+                ctx.toReject = reject;
+
                 fnConfiguracionDefecto();
                 if(pars.width || pars.maxElementsShow > 1) {
                     fnCalcularAnchoMaximo();
@@ -71,14 +74,12 @@
                     fnConfigurarBotones();
                     fnFinalizarConfiguracion();
                     resolve();
-                }                
+                }
             } catch(e) {
                 reject(e);
             }
         }).catch(jr.fnErrorHandler);
-        //---------------------------------
 
-        // end transitions
         ctx.promise.then(() => ctx.firstChild.dispatchEvent(new HashChangeEvent('transitionend')));
 
         return ctx;
@@ -98,11 +99,11 @@
             // remove listener
             ctx.firstChild.removeEventListener('transitionend', ctx.firstChild.handlerTransitionEnd, false);
             ctx.firstChild.removeEventListener('transitionstart', ctx.firstChild.handlerTransitionStart, false);
-
+            
             // add listener
             ctx.firstChild.addEventListener('transitionend', ctx.firstChild.handlerTransitionEnd, false);
             ctx.firstChild.addEventListener('transitionstart', ctx.firstChild.handlerTransitionStart, false);
-
+            
             // Se obtienen los elementos y los selectores para las reglas de estilos
             if(pars.qWrapper) {
                 pars.contenedorSlideElement = (ctx.contenedorSlideElement = ctx.contenedorSlideElement || document.querySelector(pars.qWrapper));
@@ -298,7 +299,7 @@
 
                 pars = null;
                 css = null;
-                resolve();
+                //resolve();
             });
         } // end fnCrearTagLink
         //---------------------------------
@@ -334,20 +335,23 @@
     function fnMoveLeft(e) {
         var ctx = this,
             ul = ctx.slideElement,
-            classString = fnFindWord("[a]" + ctx.rangeNumber, ul.getAttribute("class")) || 'a0',
+            currentClass = ul.getAttribute("class"),
+            classString = fnFindWord("[a]" + ctx.rangeNumber, currentClass) || 'a0',
             activeItem = parseInt(fnFindWord(ctx.rangeNumber, classString)) - ctx.maxElementsShow;
         
         if (ctx.active) return ctx;
-        
-        ctx.promise.then(() => {
-            // Se valida el final del slide
-            if (fnShowButton(activeItem, ctx)) return ctx;
-            ul.classList.remove(classString);
-            if (activeItem < ctx.count) ul.classList.add("a" + (activeItem));
+        // Se valida el final del slide
+        if (fnShowButton(activeItem, ctx)) return ctx;
 
-            return ctx;
-        });
+        if(classString) ul.classList.remove(classString);
+        if(activeItem < ctx.count) ul.classList.add("a" + (activeItem));
 
+        if(ctx.active = currentClass !== ul.getAttribute("class")) {
+            ctx.promise = new Promise((resolve, reject) => {
+                ctx.toResolve = resolve;
+                ctx.toReject = reject;
+            });
+        }
         return ctx;
     } // end mehod
     //---------------------------------
@@ -360,18 +364,23 @@
     function fnMoveRight(e) {
         var ctx = this,
             ul = ctx.slideElement,
-            classString = fnFindWord("[a]" + ctx.rangeNumber, ul.getAttribute("class")) || 'a0',
+            currentClass = ul.getAttribute("class"),
+            classString = fnFindWord("[a]" + ctx.rangeNumber, currentClass) || 'a0',
             activeItem = parseInt(fnFindWord(ctx.rangeNumber, classString)) + (!ctx.manualWidth ? ctx.maxElementsShow : 1);
-        if (ctx.active) return ctx;
+        
+        if (ctx.active) return ctx;     
+        // Se valida el inicio del slide
+        if (fnShowButton(activeItem, ctx)) return ctx;
 
-        ctx.promise.then(() => {
-            // Se valida el inicio del slide
-            if (fnShowButton(activeItem, ctx)) return ctx;
-            ul.classList.remove(classString);
-            if (activeItem > 0) ul.classList.add("a" + (activeItem));
+        if(classString) ul.classList.remove(classString);
+        if (activeItem > 0) ul.classList.add("a" + (activeItem));
 
-        });
-
+        if(ctx.active = currentClass !== ul.getAttribute("class")) {
+            ctx.promise = new Promise((resolve, reject) => {
+                ctx.toResolve = resolve;
+                ctx.toReject = reject;
+            });
+        }
         return ctx;
     } // end method
     //---------------------------------
@@ -384,13 +393,21 @@
     function fnMoveTo(index) {
         var ctx = this,
             ul = ctx.slideElement,
-            classString = fnFindWord("[a]" + ctx.rangeNumber, ul.getAttribute("class")); // || 'a0'
+            currentClass = ul.getAttribute("class"),
+            classString = fnFindWord("[a]" + ctx.rangeNumber, currentClass); // || 'a0'
 
+        if (ctx.active) return ctx;     
         fnShowButton(index, ctx);
-        
-        ul.classList.remove(classString);
+
+        if(classString) ul.classList.remove(classString);
         if (index > 0) ul.classList.add('a' + index);
 
+        if(ctx.active = currentClass !== ul.getAttribute("class")) {
+            ctx.promise = new Promise((resolve, reject) => {
+                ctx.toResolve = resolve;
+                ctx.toReject = reject;
+            });
+        }
         return ctx;
     } // end fnMoveTo
     //---------------------------------
@@ -441,24 +458,6 @@
 
         return false;
     } // end method
-    //---------------------------------
-
-    /*
-        //---------------------------------
-        // Función para asiganar en el contexto el li activo
-        //---------------------------------
-    */
-    function fnSetNotActiveSlide(instanceJSlide) {
-        // Recursividad
-        var ctx = instanceJSlide,
-            classString = fnFindWord("[a]" + ctx.rangeNumber, ctx.slideElement.getAttribute("class")) || 'a0',
-            activeItem = parseInt(fnFindWord(ctx.rangeNumber, classString));
-
-        ctx.active = false;
-        ctx.activeSlide = document.querySelector(ctx.qSlide + ' > li:nth-child(' + (activeItem + 1) + ')');
-
-        jr.execFunction(ctx.callback, ctx.activeSlide);
-    } // end function
     //---------------------------------
 
     /*
@@ -527,21 +526,6 @@
 
     /*
         //---------------------------------
-        // Función para ejecutar un callback cuando se finalice la transición
-        //---------------------------------
-        // Parameters: 
-        //---------------------------------
-        // @cb: Función de callback
-        //---------------------------------
-    */
-    function fnFinalizarTransicion(cb) {
-        this.callback = cb;
-        return this;
-    } // end function 
-    //---------------------------------
-
-    /*
-        //---------------------------------
         // Función para simular una estructura de promise
         //---------------------------------
         // Parameters: 
@@ -551,9 +535,7 @@
     */
     function fnThen(resolve, reject) {
         var ctx = this;
-        if(ctx.active) ctx.callback = resolve;
-        else resolve();
-        return ctx;
+        return ctx.promise.then(resolve, reject);
     }
     //---------------------------------
 
@@ -567,11 +549,11 @@
         //---------------------------------
     */
     function handlerTransitionStart(ctx, e) {
-        if(!ctx.firstChild.isEqualNode(e.target)) return;
-        ctx.active = true;
+        if(!ctx.firstChild.isEqualNode(e.target)) return;       
+        return ctx; 
     }
     //---------------------------------
-
+    
     /*
         //---------------------------------
         // Función para cuando finaliza la transición del primer li
@@ -582,8 +564,15 @@
         //---------------------------------
     */
     function handlerTransitionEnd(ctx, e) {
-        if(!ctx.firstChild.isEqualNode(e.target)) return;
-        fnSetNotActiveSlide(ctx);
+        if(e.propertyName != 'opacity' || !ctx.firstChild.isEqualNode(e.target)) return;
+        var classString = fnFindWord("[a]" + ctx.rangeNumber, ctx.slideElement.getAttribute("class")) || 'a0',
+            activeItem = parseInt(fnFindWord(ctx.rangeNumber, classString)),
+            isActive = ctx.active;
+
+        ctx.active = false;
+        ctx.activeSlide = document.querySelector(ctx.qSlide + ' > li:nth-child(' + (activeItem + 1) + ')');
+        
+        jr.execFunction(ctx.toResolve, ctx.activeSlide);
     }
     //---------------------------------    
 
@@ -616,6 +605,9 @@
     //---------------------------------
 
     // Public API (Events)
+    JSlide.prototype = Object.create(Promise.prototype);
+    JSlide.prototype.constructor = JSlide;
+
     JSlide.prototype.left = fnMoveLeft;
     JSlide.prototype.right = fnMoveRight;
     JSlide.prototype.moveTo = fnMoveTo;

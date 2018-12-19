@@ -8,7 +8,7 @@
 // Revisar de nuevo los service worker
 // ver lo del controller usar nuevos eventos
 // ver si es mejor usar skipWaiting
-// 
+// ver diferencia de respondWith y waitUntil
 
 self.importScripts('/assets/js/workers/requester-tools.js');
 
@@ -179,8 +179,16 @@ self.requester = {};
 		}
 
 		if(!event.request.url.startsWith(self.location.origin)) {
-			return event.respondWith(fetch(event.request));
-		} 
+			let promise = init().then(async () => {
+				let cachedResponse = await CACHE_CURRENT.match(event.request);
+				return cachedResponse ? cachedResponse : fetch(event.request).then(response => {
+					event.waitUntil(CACHE_CURRENT.put(event.request.url, response.clone()));
+					return response;
+				});
+			});
+
+			return event.respondWith(promise);
+		}
 
 		let promiseCache = init().then(() => {
 			let OFFLINEURL = 'index.html',
@@ -238,7 +246,10 @@ self.requester = {};
 		return self.tools.getFile(datos);
 	}
 
-
+	/**
+	 * Obtiene el archivo con la inforamciòn del cambio en los documentos
+	 * @return {Promise<object>} Informaciòn de cambios de los documentos
+	 */
 	function updateFilesToUpdate() {
 		if(!navigator.onLine) return Promise.resolve(self.tools.constants.FILES_SERVER = {});
 
